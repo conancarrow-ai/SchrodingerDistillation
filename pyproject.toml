@@ -17,12 +17,22 @@ dependencies = [
     "z1t",
 ]
 
+[dependency-groups]
+validation = ["torch>=2.2"]
+
 [tool.uv.sources]
 st = { path = "sparse-transformers/research/st", editable = true }
 z1t = { path = "sparse-transformers/research/z1t", editable = true }
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.uv]
 environments = ["sys_platform == 'linux'"]
+default-groups = ["validation"]
 
 [build-system]
 requires = ["setuptools>=61"]
