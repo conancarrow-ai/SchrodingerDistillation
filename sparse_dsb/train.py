@@ -53,6 +53,9 @@ def main(argv=None):
     ipf_config, model_config = build_configs(cfg)
     name = cfg.get("name", os.path.splitext(os.path.basename(args.config))[0])
     out_dir = args.out or os.path.join("runs", name)
+    if os.path.exists(os.path.join(out_dir, "logs", "metrics.csv")) and not ipf_config.checkpoint_run:
+        print(f"{out_dir} already holds a run; pick another --out or resume with ipf.checkpoint_run=true", file=sys.stderr)
+        sys.exit(2)
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, "config.yaml"), "w") as handle:
         yaml.safe_dump({"name": name, "data": cfg.get("data", {}), "ipf": dataclasses.asdict(ipf_config),
