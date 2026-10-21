@@ -20,10 +20,19 @@ cumulative time, the regression targets, the T - t network input during
 training and t during simulation, the EMA rate and its update rule, Adam with
 gradient-norm clipping, fresh optimisers per half-step, the cache refresh
 schedule, the prior N(mean_final, var_final), the adaptive prior mean, the
-random horizontal flip and the checkpoint and sample-grid cadence. Differences:
+random horizontal flip, the cache refresh after the gradient step of every
+cache_refresh_stride-th iteration, and the checkpoint and sample-grid cadence. Differences:
 cache rows are visited in a random permutation drawn at each refresh instead
 of in storage order, the whole cache lives on the accelerator, and simulation
 and training steps are jitted lax.scan / optax programs.
+
+Data parallelism (docs/sharding.md): the devices named by IPFConfig.devices form
+a one-dimensional mesh with axis "batch". Parameters, optimiser state and EMA are
+replicated; the trajectory cache is sharded over rows; data and prior batches,
+the chains that build the cache and the minibatch of a gradient step are sharded
+over their batch axis, so every device simulates and differentiates its share
+and XLA sums the gradients. With one device the program is the single-device
+program.
 """
 from __future__ import annotations
 
@@ -40,6 +49,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+from jax.sharding import NamedSharding, PartitionSpec
 
 from .cache import Cache, concatenate_caches, flatten_trajectories, minibatch
 from .data import adaptive_mean, sample_images
@@ -90,6 +100,26 @@ class IPFConfig:
     sample_checkpoint_f: str = ""
     sample_checkpoint_b: str = ""
     seed: int = 0
+    # data parallelism: 0 = every visible device, n = the first n visible devices,
+    # a list = those indices of jax.devices()
+    devices: int | list[int] = 0
+
+
+def select_devices(specification) -> list:
+    visible = jax.devices()
+    if isinstance(specification, int):
+        if specification < 0 or specification > len(visible):
+            raise ValueError(f"devices={specification} but {len(visible)} devices are visible: {visible}")
+        return visible[:specification] if specification else visible
+    chosen = list(specification)
+    if not chosen or any(index not in range(len(visible)) for index in chosen):
+        raise ValueError(f"devices={chosen} must be a non-empty list of indices into jax.devices() = {visible}")
+    return [visible[index] for index in chosen]
+
+
+def place(tree, sharding):
+    """Move the array leaves of a tree onto a sharding; other leaves pass through."""
+    return jax.tree.map(lambda leaf: jax.device_put(leaf, sharding) if eqx.is_array(leaf) else leaf, tree)
 
 
 class CSVLog:
@@ -117,12 +147,20 @@ class IPF:
         self.plot_logger = CSVLog(os.path.join(out_dir, "logs", "plot_logs.csv"),
                                   ["fb", "n", "i", "init_var", "final_var", "mean_init", "mean_final", "T"])
 
+        self.devices = select_devices(config.devices)
+        self.mesh = jax.sharding.Mesh(np.asarray(self.devices), ("batch",), axis_types=(jax.sharding.AxisType.Auto,))
+        self.replicated = NamedSharding(self.mesh, PartitionSpec())
+        self.batch_sharding = NamedSharding(self.mesh, PartitionSpec("batch"))
+        for name in ("cache_npar", "plot_npar", "batch_size"):
+            if getattr(config, name) % len(self.devices):
+                raise ValueError(f"{name}={getattr(config, name)} is not divisible by the {len(self.devices)} devices {self.devices}")
+
         gammas = make_gammas(config.num_steps, config.gamma_min, config.gamma_max, config.gamma_space)
         self.gammas = jnp.asarray(gammas)
         self.time = jnp.asarray(cumulative_time(gammas))
         self.T = float(gammas.sum())
 
-        self.images = jnp.asarray(images_uint8)
+        self.images = place(np.asarray(images_uint8), self.replicated)
         self.shape = (model_config.channels, model_config.image_size, model_config.image_size)
         mean = adaptive_mean(images_uint8) if config.adaptive_mean else config.mean_final
         self.mean_final = jnp.float32(mean)
@@ -143,11 +181,12 @@ class IPF:
         stored, active = parameter_counts(self.nets["b"])
         self.info = {"parameters_stored": stored, "parameters_active": active, "T": self.T,
                      "mean_final": float(mean), "var_final": config.var_final,
-                     "sequence": model_config.sequence, "tokens": model_config.tokens}
+                     "sequence": model_config.sequence, "tokens": model_config.tokens,
+                     "devices": [str(device) for device in self.devices]}
         with open(os.path.join(out_dir, "info.json"), "w") as handle:
             json.dump(self.info, handle, indent=2)
         print(f"parameters stored={stored:,d} active={active:,d} sequence={model_config.sequence} T={self.T:.4f} "
-              f"mean_final={float(mean):.4f}", flush=True)
+              f"mean_final={float(mean):.4f} devices={len(self.devices)} {self.devices}", flush=True)
 
     # ------------------------------------------------------------------ setup
     def next_key(self):
@@ -155,9 +194,12 @@ class IPF:
         return key
 
     def build_net(self, direction: str):
-        net = build_model(self.model_config, self.next_key())
+        net = place(build_model(self.model_config, self.next_key()), self.replicated)
         self.nets[direction] = net
         self.ema[direction] = eqx.filter(net, eqx.is_inexact_array)
+
+    def new_permutation(self, rows: int):
+        return place(jax.random.permutation(self.next_key(), rows), self.replicated)
 
     def split(self, direction: str):
         return eqx.partition(self.nets[direction], eqx.is_inexact_array)
@@ -170,10 +212,10 @@ class IPF:
         c = self.config
         for direction, path, sample_path in (("f", c.checkpoint_f, c.sample_checkpoint_f), ("b", c.checkpoint_b, c.sample_checkpoint_b)):
             if path:
-                self.nets[direction] = eqx.tree_deserialise_leaves(path, self.nets[direction])
+                self.nets[direction] = place(eqx.tree_deserialise_leaves(path, self.nets[direction]), self.replicated)
                 self.ema[direction] = eqx.filter(self.nets[direction], eqx.is_inexact_array)
             if sample_path:
-                sample_net = eqx.tree_deserialise_leaves(sample_path, self.nets[direction])
+                sample_net = place(eqx.tree_deserialise_leaves(sample_path, self.nets[direction]), self.replicated)
                 self.ema[direction] = eqx.filter(sample_net, eqx.is_inexact_array)
             print(f"loaded {direction}: net={path or '-'} ema={sample_path or '-'}", flush=True)
 
@@ -183,6 +225,7 @@ class IPF:
         optimizer = self.optimizer
         gammas, time = self.gammas, self.time
         mean_final, var_final = self.mean_final, self.var_final
+        replicated, batch_sharding = self.replicated, self.batch_sharding
 
         def batched(params, static):
             net = eqx.combine(params, static)
@@ -190,7 +233,9 @@ class IPF:
 
         @eqx.filter_jit
         def train_step(params, static, opt_state, ema_params, cache, permutation, iteration):
-            xs, outs, steps = minibatch(cache, permutation, iteration, config.batch_size)
+            params, opt_state, ema_params = eqx.filter_shard((params, opt_state, ema_params), replicated)
+            cache = eqx.filter_shard(cache, batch_sharding)
+            xs, outs, steps = eqx.filter_shard(minibatch(cache, permutation, iteration, config.batch_size), batch_sharding)
 
             def loss_fn(p):
                 pred = batched(p, static)(xs, T - steps)
@@ -199,36 +244,47 @@ class IPF:
                 return jnp.mean(jnp.square(pred - outs))
 
             loss, grads = jax.value_and_grad(loss_fn)(params)
+            grads = eqx.filter_shard(grads, replicated)
             grad_norm = optax.tree.norm(grads)
             updates, opt_state = optimizer.update(grads, opt_state, params)
             params = eqx.apply_updates(params, updates)
             ema_params = jax.tree.map(lambda e, p: (1.0 - ema_rate) * p + ema_rate * e, ema_params, params)
+            params, opt_state, ema_params = eqx.filter_shard((params, opt_state, ema_params), replicated)
             return params, opt_state, ema_params, loss, grad_norm
 
         @eqx.filter_jit
         def cache_init(key, x0):
-            return flatten_trajectories(*record_init_langevin(key, x0, gammas, time, mean_final, var_final))
+            x0 = eqx.filter_shard(x0, batch_sharding)
+            cache = flatten_trajectories(*record_init_langevin(key, x0, gammas, time, mean_final, var_final))
+            return eqx.filter_shard(cache, batch_sharding)
 
         @eqx.filter_jit
         def cache_from_net(key, params, static, x_init):
+            params = eqx.filter_shard(params, replicated)
+            x_init = eqx.filter_shard(x_init, batch_sharding)
             trajectories = record_langevin_seq(key, batched(params, static), x_init, gammas, time, mean_match)
-            return flatten_trajectories(*trajectories)
+            return eqx.filter_shard(flatten_trajectories(*trajectories), batch_sharding)
 
         @eqx.filter_jit
         def sample(key, params, static, x_init):
+            params = eqx.filter_shard(params, replicated)
+            x_init = eqx.filter_shard(x_init, batch_sharding)
             x_tot, _, _ = record_langevin_seq(key, batched(params, static), x_init, gammas, time, mean_match, sample=True)
             return x_tot
 
         @functools.partial(jax.jit, static_argnames=("batch_size",))
         def data_batch(key, images, batch_size):
-            return sample_images(key, images, batch_size, config.random_flip)
+            x = sample_images(key, images, batch_size, config.random_flip)
+            return jax.lax.with_sharding_constraint(x, batch_sharding)
 
         @functools.partial(jax.jit, static_argnames=("batch_size",))
         def prior_batch(key, batch_size):
-            return mean_final + jnp.sqrt(var_final) * jax.random.normal(key, (batch_size,) + self.shape)
+            x = mean_final + jnp.sqrt(var_final) * jax.random.normal(key, (batch_size,) + self.shape)
+            return jax.lax.with_sharding_constraint(x, batch_sharding)
 
         @jax.jit
         def init_trajectories(key, x0):
+            x0 = jax.lax.with_sharding_constraint(x0, batch_sharding)
             return record_init_langevin(key, x0, gammas, time, mean_final, var_final)[0]
 
         self._train_step = train_step
@@ -257,7 +313,7 @@ class IPF:
             else:
                 x_init = self._prior_batch(batch_key, config.cache_npar)
                 parts.append(self._cache_from_net(chain_key, sample_params, sample_static, x_init))
-        cache = concatenate_caches(parts) if len(parts) > 1 else parts[0]
+        cache = place(concatenate_caches(parts), self.batch_sharding) if len(parts) > 1 else parts[0]
         jax.block_until_ready(cache)
         print(f"cache {direction} n={n}: rows={cache.xs.shape[0]} built in {time.time() - start:.1f}s", flush=True)
         return cache
@@ -270,18 +326,12 @@ class IPF:
             self.build_net(direction)
         params, static = self.split(direction)
         ema_params = self.ema[direction]
-        opt_state = self.optimizer.init(params)
-        permutation = jax.random.permutation(self.next_key(), cache.xs.shape[0])
+        opt_state = place(self.optimizer.init(params), self.replicated)
+        permutation = self.new_permutation(cache.xs.shape[0])
 
         start = time.time()
         losses = []
         for i in range(config.num_iter + 1):
-            if i % config.cache_refresh_stride == 0 and i > 0:
-                self.nets[direction] = eqx.combine(params, static)
-                self.ema[direction] = ema_params
-                cache = None
-                cache = self.new_cache(direction, n)
-                permutation = jax.random.permutation(self.next_key(), cache.xs.shape[0])
             params, opt_state, ema_params, loss, grad_norm = self._train_step(
                 params, static, opt_state, ema_params, cache, permutation, jnp.int32(i % config.cache_refresh_stride))
             losses.append(loss)
@@ -297,6 +347,10 @@ class IPF:
             self.nets[direction] = eqx.combine(params, static)
             self.ema[direction] = ema_params
             self.save_step(i, n, direction)
+            if i % config.cache_refresh_stride == 0 and 0 < i < config.num_iter:
+                cache = None
+                cache = self.new_cache(direction, n)
+                permutation = self.new_permutation(cache.xs.shape[0])
         self.nets[direction] = eqx.combine(params, static)
         self.ema[direction] = ema_params
         mean_loss = float(jnp.mean(jnp.stack(losses[-max(1, len(losses) // 10):])))

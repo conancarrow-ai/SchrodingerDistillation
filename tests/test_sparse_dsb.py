@@ -146,7 +146,7 @@ def test_ipf_smoke(tmp_path, family):
         pytest.skip("IPF smoke test runs on GPU only")
     images = np.asarray(jax.random.randint(KEY, (64, 8, 8, 3), 0, 256), dtype=np.uint8)
     ipf_config = IPFConfig(num_steps=6, n_ipf=2, num_iter=12, batch_size=16, cache_npar=8, cache_refresh_stride=6,
-                           log_stride=3, gif_stride=6, plot_npar=4, num_cache_batches=2)
+                           log_stride=3, gif_stride=6, plot_npar=4, num_cache_batches=2, devices=1)
     model_config = ModelConfig(family=family, image_size=8, patch_size=4, n_layers=2, n_embed=32, n_head=4,
                                linear_fan_in=8, time_embed_dim=16)
     ipf = IPF(ipf_config, model_config, images, str(tmp_path))
