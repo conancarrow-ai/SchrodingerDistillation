@@ -89,16 +89,18 @@ def test_patchify_roundtrip():
     np.testing.assert_allclose(np.asarray(unpatchify(tokens, 3, 16, 16, 4)), np.asarray(x))
 
 
-@pytest.mark.parametrize("family", ["st", "z1t"])
-def test_model_identity_at_init_and_fan_in(family):
+@pytest.mark.parametrize("family, sparse_linear", [("st", "mask"), ("z1t", "mask"), ("z1t", "gather")])
+def test_model_identity_at_init_and_fan_in(family, sparse_linear):
     config = ModelConfig(family=family, image_size=16, patch_size=4, n_layers=2, n_embed=64, n_head=4,
-                         linear_fan_in=16, time_embed_dim=16)
+                         linear_fan_in=16, time_embed_dim=16, sparse_linear=sparse_linear)
     model = build_model(config, KEY)
     x = jax.random.normal(KEY, (3, 16, 16))
     np.testing.assert_allclose(np.asarray(model(x, jnp.float32(0.3))), np.asarray(x))
     sparse = [n for n in jax.tree.leaves(model, is_leaf=lambda n: isinstance(n, (MaskedSparseLinear, GatherSparseLinear)))
               if isinstance(n, (MaskedSparseLinear, GatherSparseLinear))]
     assert sparse, "expected sparse linears with K < input width"
+    expected = GatherSparseLinear if sparse_linear == "gather" else MaskedSparseLinear
+    assert all(isinstance(layer, expected) for layer in sparse)
     for layer in sparse:
         if isinstance(layer, MaskedSparseLinear):
             assert bool(jnp.all(layer.mask.sum(axis=1) == 16))

@@ -8,7 +8,10 @@ blocks of either family of the sparse-transformers code:
   st  : causal softmax attention with an optional local window, sparse linears
         with fan-in K, RMS normalisation (st.transformer.Block);
   z1t : attention-free attention (conv, recurrence or full), sparse linears with
-        fan-in K, dynamic tanh normalisation (z1t.components.Block).
+        fan-in K, dynamic tanh normalisation (z1t.components.Block). The z1t
+        blocks take their linear layers from a factory; by default they get the
+        masked sparse linear of st (sparse_linear="mask"), which computes the
+        same map as z1t's gather layer but is far faster on GPU at these widths.
 
 Both block families are causal, so a token only sees the tokens before it. To
 give every output patch the whole image as context without touching the blocks,
@@ -49,6 +52,9 @@ class ModelConfig:
     n_head: int = 4                    # attention heads (st) or AFT-conv heads (z1t)
     attn_window: int | None = None     # st only; None is dense causal attention
     linear_fan_in: int | None = None   # K; None or at least the input width gives a dense layer
+    sparse_linear: str = "mask"        # sparse layer implementation: "mask" (st: dense weight under a fixed
+                                       # boolean mask) or "gather" (z1t: (n_out, K) weights and gather indices;
+                                       # 20x slower backward pass on GPU at these widths)
     aft_kind: str = "conv"             # z1t only: conv, recurrence or full
     aft_ksize: int = 4                 # z1t only
     dyt_alpha: float = 0.5             # z1t only
@@ -83,19 +89,23 @@ def sinusoidal_embedding(t, dim: int, max_period: float = 10000.0):
     return embedding
 
 
-def make_linear_factory(family: str, fan_in: int | None):
-    """A constructor (ins, outs, key) -> linear layer of the given family with fan-in K."""
-    if family == "st":
+SPARSE_LINEARS = ("mask", "gather")
+
+
+def make_linear_factory(fan_in: int | None, sparse_linear: str = "mask"):
+    """A constructor (ins, outs, key) -> linear layer with fan-in K: dense when K reaches the input width,
+    otherwise the masked (st) or the gather (z1t) sparse linear layer. Both compute the same map."""
+    if sparse_linear == "mask":
         def make(ins, outs, key):
             k = sparse_count(fan_in, ins)
             if k >= ins:
                 return eqx.nn.Linear(ins, outs, key=key)
             return MaskedSparseLinear(ins, outs, k, key=key)
         return make
-    if family == "z1t":
+    if sparse_linear == "gather":
         factory = linear_factory(fan_in)
         return lambda ins, outs, key: factory(ins, outs, key=key)
-    raise ValueError(f"unknown family {family!r} (expected one of {FAMILIES})")
+    raise ValueError(f"unknown sparse_linear {sparse_linear!r} (expected one of {SPARSE_LINEARS})")
 
 
 def zero_linear(layer):
@@ -161,7 +171,8 @@ class SparseTransformerDenoiser(eqx.Module):
         if config.family not in FAMILIES:
             raise ValueError(f"unknown family {config.family!r} (expected one of {FAMILIES})")
         keys = jax.random.split(key, 5 + config.n_layers)
-        make_linear = make_linear_factory(config.family, config.linear_fan_in)
+        make_linear = make_linear_factory(config.linear_fan_in, config.sparse_linear)
+        block_linear = lambda ins, outs, *, key: make_linear(ins, outs, key)
         dim, sequence = config.n_embed, config.sequence
 
         self.family = config.family
@@ -183,10 +194,10 @@ class SparseTransformerDenoiser(eqx.Module):
         else:
             attention = attention_factory(
                 config.aft_kind, max_seq=sequence, heads=config.n_head, ksize=config.aft_ksize,
-                linear=linear_factory(config.linear_fan_in),
+                linear=block_linear,
             )
             self.blocks = [
-                AFTBlock(dim, key=k, attn=attention, mlp_linear=linear_factory(config.linear_fan_in),
+                AFTBlock(dim, key=k, attn=attention, mlp_linear=block_linear,
                          mlp_act=jax.nn.silu, dyt_alpha=config.dyt_alpha)
                 for k in block_keys
             ]

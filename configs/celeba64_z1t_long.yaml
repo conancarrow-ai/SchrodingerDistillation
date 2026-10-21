@@ -38,6 +38,7 @@ model:
   aft_ksize: 4
   dyt_alpha: 0.5
   linear_fan_in: 64
+  sparse_linear: mask
   context_prefix: true
   residual_output: true
   time_embed_dim: 64
