@@ -13,3 +13,4 @@ report/*.log
 report/*.out
 sparse_dsb.egg-info/
 .ipynb_checkpoints/
+dashboard/
