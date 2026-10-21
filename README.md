@@ -21,6 +21,10 @@ Deliverables:
 2. `sparse_dsb/`: a JAX port of the dsb IPF routines that trains unmodified
    sparse-transformers blocks as the forward and backward networks of the bridge.
 3. A CelebA 64x64 smoke test (section Results).
+4. A second pass: a monitoring dashboard served over the tailnet
+   (`docs/dashboard.md`), data-parallel training over the GPUs of one node
+   (`docs/sharding.md`) and a validation suite against the reference PyTorch
+   code (`docs/validation.md`).
 
 ## Which way round: port dsb to JAX, not st to PyTorch
 
@@ -83,8 +87,40 @@ Differences:
   refresh.
 - The EMA copy of the opposite network is rebuilt from its parameter tree instead
   of re-instantiating the module from saved constructor arguments.
-- Single device. Data parallelism over the GPUs of one node is a sharding
-  annotation away but is not implemented.
+- The cache refresh that the reference code performs after the last iteration
+  (and never uses) is skipped.
+- Data parallelism over the GPUs of one node (`ipf.devices`, default all visible
+  devices): parameters replicated, cache and batches sharded over rows,
+  gradients averaged by XLA. One device reproduces the single-device program bit
+  for bit; two devices reproduce one device to 2e-7 in the logged losses
+  (`docs/sharding.md`).
+
+### Validation (`docs/validation.md`)
+
+`tests/test_reference_equivalence.py` runs the reference PyTorch routines
+(`bridge.langevin`, `CacheLoader`, `EMAHelper`, the U-Net's timestep embedding,
+`Adam` with `clip_grad_norm_`, the `ipf_step` objective) on the same inputs and
+noise as the port and compares to 1e-5: schedule, both trajectory recorders in
+all modes, cache flattening, loss, gradient norm, clipped Adam step and EMA
+update agree to 1e-6 or better. `tests/test_sparse_invariants.py` checks, for
+both families and both sparse-layer implementations, that an IPF half-step
+leaves every mask and index table untouched, that masked-out weights have zero
+gradient and never move, that each unit depends on exactly its `K` inputs, and
+that checkpoints restore the supports (the failure mode where random
+assignments are not persisted). `tests/test_ipf_synthetic.py` runs three IPF
+iterations on 8x8 images of random colours and checks that the backward chain
+reaches the data statistics and the forward chain the prior variance. The
+suite runs on a GPU: `sbatch --job-name=tests slurm/run.sbatch python -m pytest -q tests`.
+
+### Dashboard (`docs/dashboard.md`)
+
+`python -m sparse_dsb.dashboard --loop 120` (job `slurm/dashboard_loop.sbatch`)
+rewrites a static page every two minutes from `runs/*`, the Slurm queue and the
+data array; `scripts/serve_dashboard.sh` serves it from fokker over the
+tailnet at http://100.92.190.10:8892/ (http://fokker.tail02e69.ts.net:8892/):
+a runs table with job status, progress, losses and throughput, per-run loss
+curves, chain statistics against the data and prior targets, the latest and
+historical sample grids, a data tab, the queue and the benchmark table.
 
 ### Models (`sparse_dsb/models.py`)
 
@@ -145,7 +181,7 @@ the login node and jobs run on compute nodes through `uv run --no-sync`.
 ```bash
 NFS=/mnt/data0/shared/colin
 export PATH=$NFS/bin:$PATH UV_PYTHON_INSTALL_DIR=$NFS/.uv/python UV_CACHE_DIR=$NFS/.uv/cache
-uv sync --python 3.12                     # jax[cuda12]==0.11.2, equinox 0.13.8, st and z1t editable
+uv sync --python 3.12                     # jax[cuda12]==0.11.2, equinox 0.13.8, st and z1t editable, CPU torch for the reference tests
 
 # CelebA train split -> data/celeba64_train.npy (uint8, 162770 x 64 x 64 x 3), about one minute
 sbatch --job-name=celeba-prep slurm/cpu.sbatch python -m sparse_dsb.data \
@@ -153,9 +189,11 @@ sbatch --job-name=celeba-prep slurm/cpu.sbatch python -m sparse_dsb.data \
   --partition /mnt/data0/shared/dominic/diffusion_schrodinger_bridge/data/celeba/list_eval_partition.txt \
   --out data/celeba64_train.npy --image-size 64 --workers 16
 
-sbatch --job-name=tests slurm/run.sbatch python -m pytest -x -q tests
+sbatch --job-name=tests slurm/run.sbatch python -m pytest -q tests
 sbatch --job-name=st-smoke slurm/run.sbatch python -m sparse_dsb.train --config configs/celeba64_smoke.yaml
 sbatch --job-name=z1t-smoke slurm/run.sbatch python -m sparse_dsb.train --config configs/celeba64_z1t_smoke.yaml
+sbatch --job-name=st-4gpu --gres=gpu:rtx6000:4 slurm/run.sbatch python -m sparse_dsb.train --config configs/celeba64_smoke.yaml --out runs/st_4gpu
+sbatch slurm/dashboard_loop.sbatch && bash scripts/serve_dashboard.sh
 ```
 
 A run writes to `runs/<name>/`: `config.yaml`, `info.json` (parameter counts,
@@ -197,8 +235,11 @@ faces. Loss curves: `report/smoke/*_loss.png`; per-half-step tables:
 ### Longer runs (3 IPF iterations of 20,000 steps, learning rate 2e-4)
 
 `configs/celeba64_st_long.yaml` and `configs/celeba64_z1t_long.yaml`, same
-models. After the first backward half-step (20k steps, 30 min for st and 20 min
-for z1t) the backward samples match the data statistics (variance 0.061 / 0.069,
-mean 0.448 / 0.437) and show recognisable faces at the 4x4 patch granularity for
-st, noisier ones for z1t; see `report/long/`. The runs continue through IPF
-iterations 2 and 3.
+models, one GPU each. After the first backward half-step (20k steps, 30 min for
+st and 20 min for z1t) the backward samples match the data statistics
+(variance 0.061 / 0.069, mean 0.448 / 0.437) and show faces at the 4x4 patch
+granularity; after the second backward half-step the st samples are clearly
+recognisable, varied faces (`report/long/st_backward_samples_n2_20k.png`), the
+z1t samples the same with more pixel noise. Every half-step takes 30 to 48 min
+(a cache refresh with a trained network costs 6 s, 200 of them per half-step);
+the dashboard follows the runs live.
