@@ -41,9 +41,10 @@ in JAX and leave the sparse-transformers code untouched. (b) was chosen.
   PyTorch calls and feeds the trajectory cache back through a `DataLoader`. In
   JAX the chain is one `lax.scan`, the whole cache lives on the device, and
   sampling a minibatch, the gradient step, the Adam update and the EMA update are
-  one jitted program. The smoke test below runs at roughly 15 gradient steps per
-  second with a 513-token sequence per image on one GPU, which is the speed of
-  the training step itself.
+  one jitted program. On one RTX PRO 6000 the smoke runs below take 12 (st) and
+  20 (z1t) gradient steps per second at batch 128 with a 513-token sequence per
+  image, and a cache refresh (300 trajectories of 50 steps, two network
+  evaluations per step) takes 6 s.
 - The st and z1t training scripts already use the `eqx.filter_jit` + `optax`
   pattern, so the port composes with them (the sparse linear masks and gather
   indices are non-float leaves and are excluded from the optimiser and the EMA
@@ -111,6 +112,17 @@ the first output patch with the prefix and leaves it unchanged without).
 The zero-initialised output projection makes every network start as the
 identity map, which is the right starting point for the mean-matching
 parametrisation of the reference code (`pred = net(x, t) - x`).
+
+The two packages implement the sparse linear layer differently: st keeps a dense
+weight under a fixed boolean mask, z1t keeps the `(n_out, K)` active weights and
+gathers its `K` inputs by index. They compute the same map, but on a GPU at
+these widths the gather and its scatter-add backward pass are 20 to 30 times
+slower than the masked matmul (`report/benchmark_rtx6000.txt`: a gradient step
+of the AFT-conv model takes 1285 ms with the gather layer and 40 ms with the
+masked one, against 66 ms for the st model). The z1t blocks accept their linear
+layers through a factory argument, so `model.sparse_linear: mask` (the default)
+builds the unmodified z1t blocks around st's masked layer; `gather` restores
+z1t's own layer.
 
 ### Fan-in
 
