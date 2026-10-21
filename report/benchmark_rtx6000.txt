@@ -1,0 +1,17 @@
+# Micro-benchmark on one RTX PRO 6000 Blackwell (jax 0.11.2), batch 128 CelebA 64x64 images, 513-token sequence,
+# 6 blocks, n_embed 256, K = 64. Script: report/bench_z1t.py (slurm job 693908).
+st  mask forward B=128                                       22.8 ms
+st  mask value_and_grad B=128                                65.8 ms
+z1t conv mask forward B=128                                  12.6 ms
+z1t conv mask value_and_grad B=128                           40.2 ms
+z1t conv gather forward B=128                               166.1 ms
+z1t conv gather value_and_grad B=128                       1284.8 ms
+z1t recurrence mask forward B=128                            22.1 ms
+z1t recurrence mask value_and_grad B=128                    110.3 ms
+depthwise causal conv forward (vmap B)                        0.4 ms
+depthwise causal conv grad (x and kernel)                     1.0 ms
+cumsum over T forward                                         0.1 ms
+cumsum over T grad                                            0.3 ms
+shift-and-add causal conv forward                             0.1 ms
+shift-and-add causal conv grad                                0.1 ms
+max abs diff conv vs shift-add: 1.9073486328125e-06
