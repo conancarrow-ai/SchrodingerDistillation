@@ -165,3 +165,40 @@ arguments override config fields, e.g. `ipf.num_iter=500 model.n_layers=4`.
 
 The block diagram is compiled with
 `/mnt/data0/shared/colin/.tools/tectonic/tectonic report/unet_celeba.tex`.
+
+## Results
+
+### Smoke tests (CelebA 64x64, 4 IPF iterations of 2,000 steps per half-step)
+
+Both configs: 256 tokens of 4x4 patches, 6 blocks, width 256, fan-in `K = 64`
+(so every projection keeps 64 of its 256 inputs; 25% density), context prefix
+(513-token sequence), `N = 50` steps, `gamma` on the symmetric linear ramp
+`1e-5` to `0.1` (`T = 2.5`), prior `N(0.445, 0.5 I)`, batch 128, Adam `1e-4`,
+EMA 0.999, cache of 300 trajectories refreshed every 100 steps, one RTX PRO 6000.
+
+| run | blocks | parameters (stored / active) | wall time | steps/s | backward samples after iteration 4: variance, mean |
+|---|---|---|---|---|---|
+| `celeba64_st_smoke` | st: causal softmax attention, RMS norm | 4,977,712 / 1,085,488 | 43 min | 12 | 0.058, 0.447 |
+| `celeba64_z1t_smoke` | z1t: AFT-conv (8 heads, kernel 4), DyT | 4,595,501 / 988,973 | 28 min | 20 | 0.072, 0.428 |
+
+The data have pixel variance 0.077 and mean 0.445; the prior has variance 0.5.
+Per half-step the mean-matching loss moves little (it is dominated by the
+`2 gamma_k` variance of the regression targets; the first backward half-step
+goes from 0.083 to 0.071, later ones sit between 0.082 and 0.089 because their
+targets come from learnt chains), so the statistics of the simulated chains are
+the informative signal: the backward chain started from the prior reaches the
+data variance by iteration 3 and the forward chain started from data reaches
+the prior variance by iteration 2 (`report/smoke/*_plot_logs.csv`). Sample grids
+after every half-step are in `report/smoke/*_samples_backward.png`: within 2,000
+steps per half-step the samples go from noise to skin-toned, centred blobs, not
+faces. Loss curves: `report/smoke/*_loss.png`; per-half-step tables:
+`report/smoke/*_summary.json`.
+
+### Longer runs (3 IPF iterations of 20,000 steps, learning rate 2e-4)
+
+`configs/celeba64_st_long.yaml` and `configs/celeba64_z1t_long.yaml`, same
+models. After the first backward half-step (20k steps, 30 min for st and 20 min
+for z1t) the backward samples match the data statistics (variance 0.061 / 0.069,
+mean 0.448 / 0.437) and show recognisable faces at the 4x4 patch granularity for
+st, noisier ones for z1t; see `report/long/`. The runs continue through IPF
+iterations 2 and 3.
