@@ -1,0 +1,45 @@
+Dear Claude,
+
+In this directory, you will find two projects: sparse-transformers, and diffusion_schrodinger_bridge. Let's discuss the latter
+first, and call it 'dsb.' We will call the former 'st'.
+
+DSB implements an approximation to iterative proportional fitting in order to train a 'backwards process' (hopefully I don't
+confuse forwards and backwards here) that takes noise to data. I believe the relevant definitions for the iteration steps
+are to be found in IPFSequential(IPFBase), at diffusion_schrodinger_bridge/bridge/runners/ipf.py, along with the outer loop
+that iterates the alternating IPF passes. I am most interested in the UNET examples, whose model specs are under
+diffusion_schrodinger_bridge/bridge/models/unet/, and in learning the dataset CelebA. (CelebA certainly exists on this machine,
+somewhere, so don't go downloading it if you can find it here.)
+
+1. I would really like a block diagram of the unet the authors use to learn CelebA; this diagram should not contain code variable
+names or program names. You should instead use mathematical notation and accompany the diagram with a table in which each component
+is defined. I am particularly interested in the dimensions of spaces of the domains and codomains of the functions that appear.
+Please present this as a single-page pdf compiled from tex.
+
+Meanwhile, sparse-transformers concerns two main points. One is neural nets with bounded fan-in, and the other is an implementation
+of 'AFT attention' which stands for 'attention-free-transformer attention.' Lol. On the first: they have a SparseLinear class, whose
+initialization method takes a parameter 'fan_in.' This is a constraint on how the neurons in a neural network can be connected to
+one another. My understanding is that, in a picture where a neuron is a node in a graph, (let us denote the degree of node v in some
+graph by k_v) that a SparseLinear neural network's fan_in parameter specifies K_G := max_{v in G} k_v where G is the graph of the network.
+So, fan_in of some SparseLinear would be denoted by K in mathematical notation for the block diagram and other contexts. If what
+I'm saying here is inaccurate, please write out the relationship between fan_in and K_G in some equations, and carry on so that the
+fan_in quantity is the one of primary interest (you should give it a proper mathemtical symbol, with no underscores, of course).
+
+2. Indicate in colors which of the components of the block diagram in 1 exist as suitably parameterized objects of the classes
+found in the sparse-transformers project. For example, if fan_in is large enough, I expect that any of the Linear layers in
+the UNET model (surely it has some?) may be written as a SparseLinear with big fan_in. If something could reasonably be made
+sparse, but it's not mappable to the sparse-transformers code in a truly trivial fashion, please indicate that in another color
+in the diagram. If it could conceivably be made sparse, or substituted with something appropriate (Like AFT, idk) use yet
+another color for that.
+
+Okay, so ultimately, I would like to be able to run ipf_steps on models like those found in sparse-transformers. So you should
+also please think about the most performant, minimal implementation of that. I can imagine two ways to do this myself, but
+I'm not software guru. One way would be to reimplement the sparse-transformer models as nn.Modules compatible with the dsb code.
+The other would be to reimplement the dsb routines in jax, to treat the sparse-transformer models without modification of the latter.
+I will leave it to you to figure out the best one to choose, that will result in the least amount of work duplicated and the most
+performant implementation.
+
+3. Please produce that implementation and run a small, but non-trivial smoke test.
+
+Please write frequent, short (<2 line) git commits. Programs should be run on compute nodes, we don't have lots of memory on the
+login node and OOM can kill other processes. I like uv for python environment management but don't torture things into that 
+framework if it is unnatural.

@@ -1,0 +1,6 @@
+[submodule "diffusion_schrodinger_bridge"]
+	path = diffusion_schrodinger_bridge
+	url = https://github.com/JTT94/diffusion_schrodinger_bridge.git
+[submodule "sparse-transformers"]
+	path = sparse-transformers
+	url = https://github.com/extropic-ai/sparse-transformers.git

@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.scratch/
+runs/
+data/
+logs/
+*.eqx
+*.npy
+*.npz
+report/*.aux
+report/*.log
+report/*.out
+sparse_dsb.egg-info/
