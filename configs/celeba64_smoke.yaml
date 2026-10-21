@@ -1,0 +1,41 @@
+# Smoke test: CelebA 64x64, st family (causal softmax attention, sparse linears with K = 64), 4 IPF iterations.
+name: celeba64_st_smoke
+data:
+  path: data/celeba64_train.npy
+ipf:
+  num_steps: 50
+  gamma_min: 1.0e-5
+  gamma_max: 0.1
+  gamma_space: linspace
+  mean_match: true
+  var_final: 0.5
+  adaptive_mean: true
+  n_ipf: 4
+  num_iter: 2000
+  batch_size: 128
+  lr: 1.0e-4
+  grad_clipping: true
+  grad_clip: 1.0
+  ema: true
+  ema_rate: 0.999
+  use_prev_net: true
+  cache_npar: 300
+  num_cache_batches: 1
+  cache_refresh_stride: 100
+  log_stride: 10
+  gif_stride: 1000
+  plot_npar: 100
+  seed: 0
+model:
+  family: st
+  channels: 3
+  image_size: 64
+  patch_size: 4
+  n_layers: 6
+  n_embed: 256
+  n_head: 4
+  attn_window: null
+  linear_fan_in: 64
+  context_prefix: true
+  residual_output: true
+  time_embed_dim: 64
