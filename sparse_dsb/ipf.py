@@ -199,7 +199,7 @@ class IPF:
                 return jnp.mean(jnp.square(pred - outs))
 
             loss, grads = jax.value_and_grad(loss_fn)(params)
-            grad_norm = optax.global_norm(grads)
+            grad_norm = optax.tree.norm(grads)
             updates, opt_state = optimizer.update(grads, opt_state, params)
             params = eqx.apply_updates(params, updates)
             ema_params = jax.tree.map(lambda e, p: (1.0 - ema_rate) * p + ema_rate * e, ema_params, params)
