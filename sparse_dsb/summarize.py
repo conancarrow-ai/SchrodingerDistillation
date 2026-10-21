@@ -30,37 +30,30 @@ def half_step_table(metrics_csv: str) -> list[dict]:
     return table
 
 
-def montage(run_dir: str, path: str, directions=("b",), which="im_grid_final.png", max_columns: int = 6):
-    """One row per direction, one column per (n, i) sample grid, cropped to the first two grid rows."""
+def montage(run_dir: str, path: str, directions=("b",), which="im_grid_final.png", max_rows: int = 8, grid_rows: int = 1):
+    """One labelled row per (direction, n, i) sample grid, each cropped to its first `grid_rows` rows of images."""
     im_dir = os.path.join(run_dir, "im")
     tiles = []
     for direction in directions:
         names = sorted((d for d in os.listdir(im_dir) if d.startswith(direction + "_")),
                        key=lambda d: tuple(int(p) for p in d.split("_")[1:]))
         names = [d for d in names if os.path.exists(os.path.join(im_dir, d, which))]
-        if len(names) > max_columns:
-            names = names[-max_columns:]
-        row = []
-        for name in names:
+        for name in names[-max_rows:]:
             image = Image.open(os.path.join(im_dir, name, which))
             width, height = image.size
-            crop = image.crop((0, 0, width, min(height, 2 * (64 + 2) + 2)))
-            row.append((name, crop))
-        tiles.append(row)
-    if not tiles or not tiles[0]:
+            tiles.append((name, image.crop((0, 0, width, min(height, grid_rows * 66 + 2)))))
+    if not tiles:
         return None
-    tile_width = max(t.size[0] for row in tiles for _, t in row)
-    tile_height = max(t.size[1] for row in tiles for _, t in row)
-    label_height = 14
-    columns = max(len(row) for row in tiles)
-    sheet = Image.new("RGB", (columns * (tile_width + 4), len(tiles) * (tile_height + label_height + 4)), "white")
     from PIL import ImageDraw
+    tile_width = max(t.size[0] for _, t in tiles)
+    label_height = 14
+    sheet = Image.new("RGB", (tile_width, sum(t.size[1] + label_height + 2 for _, t in tiles)), "white")
     draw = ImageDraw.Draw(sheet)
-    for r, row in enumerate(tiles):
-        for c, (name, tile) in enumerate(row):
-            x, y = c * (tile_width + 4), r * (tile_height + label_height + 4)
-            draw.text((x + 2, y), name, fill="black")
-            sheet.paste(tile, (x, y + label_height))
+    y = 0
+    for name, tile in tiles:
+        draw.text((2, y), name, fill="black")
+        sheet.paste(tile, (0, y + label_height))
+        y += tile.size[1] + label_height + 2
     sheet.save(path)
     return path
 
