@@ -15,9 +15,13 @@ Deliverables:
 1. `report/unet_celeba.pdf` (source `report/unet_celeba.tex`): one-page block
    diagram of the U-Net the dsb code instantiates for CelebA 64x64, in
    mathematical notation, with a table of every component, its domain and
-   codomain, its parameter count and a colour code that says which components
-   exist as objects of the sparse-transformers classes, which could be made
-   sparse with an adapter, and which could be substituted.
+   codomain, its parameter count and a colour code on the atomic operations:
+   position-wise affine maps exist as `SparseLinear` objects, group
+   normalisation and the softmax attention core could be substituted (dynamic
+   tanh, attention-free attention), the rest is parameter-free. Once each
+   convolution is split into patch extraction and a position-wise affine map,
+   no operation is left in the category "sparsifiable but not trivially
+   mappable".
 2. `sparse_dsb/`: a JAX port of the dsb IPF routines that trains unmodified
    sparse-transformers blocks as the forward and backward networks of the bridge.
 3. A CelebA 64x64 smoke test (section Results).
@@ -162,7 +166,7 @@ z1t's own layer.
 
 ### Fan-in
 
-`fan_in` of `SparseLinear` is written `K`. Each output unit of a sparse linear
+`fan_in` of `SparseLinear` is written `K` here and `kappa` in the PDF. Each output unit of a sparse linear
 layer `R^{n_in} -> R^{n_out}` has exactly `K` inputs drawn uniformly without
 replacement (both implementations; st stores a dense weight under a boolean
 mask, z1t stores the `(n_out, K)` weights and gather indices). `K` is therefore
