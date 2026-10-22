@@ -209,6 +209,34 @@ N((-7.07, 0.10), 13.85 I) sits on the left mode and the backward samples stay th
 "mixturecentred" uses the prior N(0, I) written in the same yaml (`ipf.final_adaptive=false`); then all
 four networks recover both modes, with energy distances of 0.02 to 0.11 at n = 10 and about 0.2 at n = 20.
 
+### The gather layer on the circle: an initialisation effect
+
+The gather K=32 network leaves the outer circle nearly empty while the mask K=32 network fills it. Ring
+occupancy of the backward samples (fraction within one unit of the outer circle of radius 10; the data has
+50%), averaged over IPF iterations 11 to 20 (`python -m sparse_dsb.toy_rings`), for the runs
+`runs/toy_circle*`:
+
+| network | outer ring | seeds |
+|---|---|---|
+| gather K=32, its own initialisation | 0.09, 0.10, 0.11, 0.10 | 0, 1, 2, 3 |
+| mask K=32, its own initialisation | 0.34, 0.41, 0.42, 0.41 | 0, 1, 2, 3 |
+| gather K=32 with the masked layer's weights and bias | 0.40, 0.42, 0.31 | 0, 1, 2 |
+| mask K=32 with the gather layer's weights and bias | 0.10, 0.10, 0.10 | 0, 1, 2 |
+| gather K=32 with the masked layer's weight scale only | 0.23, 0.38 | 0, 1 |
+| gather K=32 with the masked layer's bias only | 0.23, 0.12 | 0, 1 |
+| mask K=32 with the gather layer's weight scale only | 0.10, 0.29 | 0, 1 |
+| mask K=32 with the gather layer's bias only | 0.17, 0.13 | 0, 1 |
+| dense; mask K=full | 0.45; 0.46 | 0 |
+
+The two classes compute the same map but initialise differently. st keeps the dense initialisation of
+`eqx.nn.Linear` under its mask: weights and bias from U(-1/sqrt(n_in), 1/sqrt(n_in)). z1t draws the K
+weights of each output from U(-1/sqrt(K), 1/sqrt(K)), twice the magnitude at K = 32 of 128, and starts
+with a zero bias. The failure follows the initialisation, not the class: every seed of the native gather
+layer fails, the gather layer with st's initialisation succeeds, and st's layer with z1t's initialisation
+fails. Both parts contribute, the weight scale more than the zero bias; `ToyModelConfig.swap_init`
+(`both`, `weights` or `bias`) selects them. In the image models of `sparse_dsb/models.py` the z1t blocks
+take st's masked layer by default, so this initialisation is not used there.
+
 ## Findings: where the port and the reference differ
 
 None of these changes a compared number beyond the tolerances above; the tests

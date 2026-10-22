@@ -124,6 +124,8 @@ Outcome (`report/toy/energy_distances.md`): the sparse networks (st masked layer
 or fan-in 32, z1t gather layers with fan-in 32) learn moon, S curve and circle as well as the dense
 reference network; the mixture is learnt by all of them once the prior is centred, and by none of them
 with the reference's first-100-points prior, which sits on the left mode.
+On the circle the z1t gather layer at fan-in 32 leaves the outer circle nearly empty where st's masked
+layer fills it; swapping their initialisations swaps the outcome (docs/validation.md, Part 4).
 
 ### Dashboard (`docs/dashboard.md`)
 
