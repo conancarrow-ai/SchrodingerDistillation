@@ -528,14 +528,14 @@ def _toy_axis(axis, limit=15.0):
     axis.set_xticks([]); axis.set_yticks([])
 
 
-def draw_toy_matrix(groups: list[tuple[str, list[dict]]], direction: str, path: str):
+def draw_toy_matrix(groups: list[tuple[str, list[dict]]], direction: str, path: str, variants=TOY_VARIANTS):
     """Rows: groups (data in the first column), columns: the networks; each panel the final samples of the
     latest half-step of that direction over the target cloud, with the logged energy distance."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    columns = ["data"] + [TOY_VARIANT_LABELS[variant] for variant in TOY_VARIANTS]
+    columns = ["data"] + [TOY_VARIANT_LABELS.get(variant, variant) for variant in variants]
     figure, axes = plt.subplots(len(groups), len(columns), figsize=(1.7 * len(columns), 1.7 * len(groups)), squeeze=False)
     for row, (name, group) in enumerate(groups):
         data_target, prior_target, mean, var = toy_group_targets(group)
@@ -546,7 +546,7 @@ def draw_toy_matrix(groups: list[tuple[str, list[dict]]], direction: str, path: 
         axis.plot(mean[0], mean[1], "o", color="tab:orange", ms=2)
         axis.set_ylabel(f"{name}\nN(({mean[0]:.1f}, {mean[1]:.1f}), {var:.1f} I)", fontsize=7)
         by_variant = {run["variant"]: run for run in group}
-        for column, variant in enumerate(TOY_VARIANTS, start=1):
+        for column, variant in enumerate(variants, start=1):
             axis, run = axes[row][column], by_variant.get(variant)
             found = latest_samples(run, direction) if run else None
             if found is None:
@@ -558,6 +558,9 @@ def draw_toy_matrix(groups: list[tuple[str, list[dict]]], direction: str, path: 
                 axis.scatter(final[:, 0], final[:, 1], s=1.5, color="tab:blue", linewidths=0)
                 energy, n = logged_energy(run, direction, tag), int(tag.split("_")[1])
                 label = (f"{energy:.2f}" if energy is not None else "") + (f"  n={n}" if n != run["n_ipf"] else "")
+                swap = run["model"].get("swap_init")
+                if swap:
+                    label += "  swapped init" if swap in (True, "both") else f"  swapped {swap} init"
                 axis.text(0.04, 0.96, label, transform=axis.transAxes, fontsize=7, va="top")
         for column in range(len(columns)):
             _toy_axis(axes[row][column])
@@ -610,14 +613,24 @@ def toy_tab(runs: list[dict], figures_of: dict, out: Path, cache: FigureCache) -
              "prior written in the same yaml.</p>"]
     if not toy_runs:
         return "".join(parts + ["<p class='muted'>no toy runs yet (bash slurm/toy_runs.sh)</p>"])
-    groups = toy_groups(toy_runs)
+    all_groups = toy_groups(toy_runs)
+    known = set(TOY_DISTRIBUTIONS) | {name + "centred" for name in TOY_DISTRIBUTIONS}
+    groups = [group for group in all_groups if group[0] in known]
+    extra = [group for group in all_groups if group[0] not in known]
     signature = json.dumps([[run["name"], file_signature(run["dir"] / "logs" / "toy_metrics.csv"),
                              [str(latest_samples(run, direction)) for direction in "bf"], run["info"].get("var_final")]
-                            for _, group in groups for run in group])
-    for direction, width in (("b", 850), ("f", 850)):
+                            for _, group in all_groups for run in group])
+    for direction in ("b", "f"):
         matrix = out / f"toy_matrix_{direction}.png"
         error = cache.ensure(f"toymatrix:{direction}", signature, matrix,
                              lambda: render(matrix, lambda temporary: draw_toy_matrix(groups, direction, temporary)))
+        if error:
+            parts.append(f"<p class='warn'>{escape_html(error)}</p>")
+    extra_variants = [variant for variant in TOY_VARIANTS if any(run["variant"] == variant for _, group in extra for run in group)]
+    extra_matrix = out / "toy_matrix_extra.png"
+    if extra:
+        error = cache.ensure("toymatrix:extra", signature, extra_matrix,
+                             lambda: render(extra_matrix, lambda temporary: draw_toy_matrix(extra, "b", temporary, extra_variants)))
         if error:
             parts.append(f"<p class='warn'>{escape_html(error)}</p>")
     strip = out / "toy_energy.png"
@@ -652,6 +665,12 @@ def toy_tab(runs: list[dict], figures_of: dict, out: Path, cache: FigureCache) -
     parts.append("<details><summary>Forward direction: final samples of the forward half-steps (data to prior) over prior samples</summary>" +
                  figure(matrix_f if matrix_f.exists() else None, "forward samples over 1000 prior samples; the number is the energy distance to the prior", 850) +
                  "</details>")
+    if extra and extra_matrix.exists():
+        width = 170 * (1 + len(extra_variants))
+        parts.append("<details><summary>Repeats and ablations: other seeds (circleseedN, ipf.seed N) and swapped initialisations "
+                     "(circleswapN: each sparse layer starts with the other implementation's weights and bias; circleweightsN, "
+                     "circlebiasN: only its weight scale or only its bias)</summary>" +
+                     figure(extra_matrix, "backward samples over the data, as in the matrix above", width) + "</details>")
     return "".join(parts)
 
 

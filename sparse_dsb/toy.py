@@ -97,14 +97,17 @@ class ToyModelConfig:
     x_dim: int = 2
     sparse_linear: str = "dense"       # dense (the reference), mask (st) or gather (z1t)
     linear_fan_in: int | None = None   # kappa of the sparse layers; None is the input width
-    swap_init: bool = False            # give each sparse layer the initial scale of the other implementation
+    swap_init: bool | str = False      # give each sparse layer the other implementation's initial weights and
+                                       # bias (True or "both"), only its weight scale ("weights") or only its bias ("bias")
 
     @property
     def label(self) -> str:
         if self.sparse_linear == "dense":
             return "dense"
         label = f"{self.sparse_linear} K={self.linear_fan_in if self.linear_fan_in is not None else 'full'}"
-        return label + (" (swapped init)" if self.swap_init else "")
+        if self.swap_init:
+            label += " (swapped init)" if self.swap_init in (True, "both") else f" (swapped {self.swap_init} init)"
+        return label
 
 
 def fairseq_embedding(t, dim: int):
@@ -119,21 +122,34 @@ def fairseq_embedding(t, dim: int):
     return embedding
 
 
-def make_toy_linear(sparse_linear: str, fan_in: int | None, swap_init: bool = False):
+def swapped_parts(swap_init) -> set:
+    if swap_init in (False, None, ""):
+        return set()
+    if swap_init in (True, "both"):
+        return {"weights", "bias"}
+    if swap_init in ("weights", "bias"):
+        return {swap_init}
+    raise ValueError(f"swap_init must be a bool, 'both', 'weights' or 'bias', not {swap_init!r}")
+
+
+def make_toy_linear(sparse_linear: str, fan_in: int | None, swap_init=False):
     """A constructor (ins, outs, key) -> layer. The mask and gather kinds always build the sparse-transformers
     class, with the fan-in clamped to [1, ins]; a full fan-in gives a mask of ones.
 
     The two classes initialise differently: the masked layer keeps the dense U(-1/sqrt(ins), 1/sqrt(ins))
     weights and bias of eqx.nn.Linear under its mask, the gather layer draws its K weights per output from
-    U(-1/sqrt(K), 1/sqrt(K)) with a zero bias. With swap_init each gets the other's initial scale."""
+    U(-1/sqrt(K), 1/sqrt(K)) with a zero bias. With swap_init each gets the other's initial weights and bias,
+    or only one of the two."""
+    parts = swapped_parts(swap_init)
     if sparse_linear == "dense":
         return lambda ins, outs, key: eqx.nn.Linear(ins, outs, key=key)
     if sparse_linear == "mask":
         def make_mask(ins, outs, key):
             k = sparse_count(fan_in, ins)
             layer = MaskedSparseLinear(ins, outs, k, key=key)
-            if swap_init:
+            if "weights" in parts:
                 layer = eqx.tree_at(lambda l: l.linear.weight, layer, layer.linear.weight * math.sqrt(ins / k))
+            if "bias" in parts:
                 layer = eqx.tree_at(lambda l: l.linear.bias, layer, jnp.zeros_like(layer.linear.bias))
             return layer
         return make_mask
@@ -141,9 +157,10 @@ def make_toy_linear(sparse_linear: str, fan_in: int | None, swap_init: bool = Fa
         def make_gather(ins, outs, key):
             k = sparse_count(fan_in, ins)
             layer = GatherSparseLinear(ins, outs, k=k, key=key)
-            if swap_init:
-                bound = 1.0 / math.sqrt(ins)
+            if "weights" in parts:
                 layer = eqx.tree_at(lambda l: l.weight, layer, layer.weight * math.sqrt(k / ins))
+            if "bias" in parts:
+                bound = 1.0 / math.sqrt(ins)
                 layer = eqx.tree_at(lambda l: l.bias, layer, jax.random.uniform(jax.random.fold_in(key, 1), (outs,), minval=-bound, maxval=bound))
             return layer
         return make_gather
