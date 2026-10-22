@@ -57,7 +57,7 @@ from .langevin import record_init_langevin, record_langevin_seq
 from .models import ModelConfig, build_model, parameter_counts
 from .plots import save_image_grid
 from .schedule import cumulative_time, make_gammas
-from .toy import ScoreNetwork, ToyModelConfig, draw_points, draw_samples, draw_trajectories, energy_distance, toy_prior
+from .toy import ScoreNetwork, ToyModelConfig, draw_points, draw_samples, draw_trajectories, energy_distance, toy_prior, toy_targets
 
 
 @dataclass
@@ -178,10 +178,8 @@ class ToyProblem:
             self.mean_final, self.var_final = toy_prior(self.array)
         else:
             self.mean_final, self.var_final = np.full(self.shape, config.mean_final, np.float32), float(config.var_final)
-        generator = np.random.default_rng(1)
-        count = min(config.plot_npar, self.array.shape[0])
-        self.data_target = self.array[generator.choice(self.array.shape[0], count, replace=False)]
-        self.prior_target = (self.mean_final + np.sqrt(self.var_final) * generator.standard_normal((count, self.shape[0]))).astype(np.float32)
+        self.data_target, self.prior_target = toy_targets(self.array, self.mean_final, self.var_final, config.plot_npar)
+        count = self.data_target.shape[0]
         self.metrics = CSVLog(os.path.join(out_dir, "logs", "toy_metrics.csv"),
                               ["fb", "n", "i", "energy_to_data", "energy_to_prior", "mean_x", "mean_y", "var"])
         draw_points(os.path.join(out_dir, "im", "data.png"), self.data_target, self.mean_final, self.var_final,
@@ -201,6 +199,8 @@ class ToyProblem:
     def write_samples(self, init_x, x_tot, i: int, n: int, direction: str):
         directory = os.path.join(self.out_dir, "im", f"{direction}_{n}_{i}")
         final_x = np.asarray(x_tot[-1])
+        os.makedirs(directory, exist_ok=True)
+        np.savez(os.path.join(directory, "samples.npz"), init=np.asarray(init_x, np.float32), final=final_x.astype(np.float32))
         to_data, to_prior = energy_distance(final_x, self.data_target), energy_distance(final_x, self.prior_target)
         self.metrics.log(fb=direction, n=n, i=i, energy_to_data=round(to_data, 5), energy_to_prior=round(to_prior, 5),
                          mean_x=round(float(final_x[:, 0].mean()), 4), mean_y=round(float(final_x[:, 1].mean()), 4),

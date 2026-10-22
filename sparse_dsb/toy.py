@@ -78,6 +78,16 @@ def toy_prior(points: np.ndarray, count: int = PRIOR_COUNT) -> tuple[np.ndarray,
     return first.mean(axis=0).astype(np.float32), float(first.var(ddof=1))
 
 
+def toy_targets(points: np.ndarray, mean_final, var_final: float, count: int) -> tuple[np.ndarray, np.ndarray]:
+    """(data_target, prior_target): `count` data points and `count` prior samples, drawn once with a fixed
+    generator, against which the samples of a run are measured and drawn."""
+    generator = np.random.default_rng(1)
+    count = min(count, points.shape[0])
+    data_target = np.asarray(points, np.float32)[generator.choice(points.shape[0], count, replace=False)]
+    prior_target = (np.asarray(mean_final, np.float32) + np.sqrt(var_final) * generator.standard_normal((count, points.shape[1]))).astype(np.float32)
+    return data_target, prior_target
+
+
 # ---------------------------------------------------------------- model
 @dataclass
 class ToyModelConfig:

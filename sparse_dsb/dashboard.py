@@ -480,99 +480,178 @@ def toy_run_figures(run: dict, out: Path, cache: FigureCache, figures: dict, not
 
 
 # ---------------------------------------------------------------- toy distribution validation
-def draw_energy_curves(runs: list[dict], distribution: str, path: str):
+TOY_VARIANT_LABELS = {"dense": "dense", "maskfull": "mask K=full", "mask32": "mask K=32", "gather32": "gather K=32"}
+
+
+def toy_groups(toy_runs: list[dict]) -> list[tuple[str, list[dict]]]:
+    """[(group, runs sorted by variant)], groups in the order of TOY_DISTRIBUTIONS; a group is the run name
+    between toy_ and the variant suffix (toy_moon_dense -> moon)."""
+    order = {name: index for index, name in enumerate(TOY_DISTRIBUTIONS)}
+    variant_order = {name: index for index, name in enumerate(TOY_VARIANTS)}
+    for run in toy_runs:
+        run["group"] = run["name"].removeprefix("toy_").rsplit("_", 1)[0]
+    names = sorted({run["group"] for run in toy_runs}, key=lambda name: (order.get(name.rstrip("centred"), 99), name))
+    return [(name, sorted((run for run in toy_runs if run["group"] == name), key=lambda run: (variant_order.get(run["variant"], 99), run["name"])))
+            for name in names]
+
+
+def toy_group_targets(group: list[dict]):
+    """(data_target, prior_target, prior mean, prior variance) of a group, from the first run's config and info."""
+    from .toy import toy_points, toy_targets
+
+    run = next((run for run in group if run["config"].get("data") and run["info"]), group[0])
+    data, info = run["config"].get("data") or {}, run["info"]
+    points = toy_points(data["distribution"], int(data.get("npar", 10000)), int(data.get("seed", 0)))
+    mean, var = info.get("mean_final_vector", [0.0, 0.0]), float(info.get("var_final", 1.0))
+    data_target, prior_target = toy_targets(points, mean, var, int(run["ipf"].get("plot_npar", 1000)))
+    return data_target, prior_target, mean, var
+
+
+def latest_samples(run: dict, direction: str) -> tuple[str, Path] | None:
+    files = grid_files(run["dir"], direction, "samples.npz")
+    return (files[-1].parent.name, files[-1]) if files else None
+
+
+def logged_energy(run: dict, direction: str, tag: str) -> float | None:
+    rows = run["toy_metrics"]
+    if not rows or not len(rows["n"]):
+        return None
+    _, n, i = tag.split("_")
+    mask = (rows["fb"] == direction) & (rows["n"] == int(n)) & (rows["i"] == int(i))
+    if not mask.any():
+        return None
+    return float((rows["energy_to_data"] if direction == "b" else rows["energy_to_prior"])[mask][-1])
+
+
+def _toy_axis(axis, limit=15.0):
+    axis.set_xlim(-limit, limit); axis.set_ylim(-limit, limit); axis.set_aspect("equal")
+    axis.set_xticks([]); axis.set_yticks([])
+
+
+def draw_toy_matrix(groups: list[tuple[str, list[dict]]], direction: str, path: str):
+    """Rows: groups (data in the first column), columns: the networks; each panel the final samples of the
+    latest half-step of that direction over the target cloud, with the logged energy distance."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    columns = ["data"] + [TOY_VARIANT_LABELS[variant] for variant in TOY_VARIANTS]
+    figure, axes = plt.subplots(len(groups), len(columns), figsize=(1.7 * len(columns), 1.7 * len(groups)), squeeze=False)
+    for row, (name, group) in enumerate(groups):
+        data_target, prior_target, mean, var = toy_group_targets(group)
+        target = data_target if direction == "b" else prior_target
+        axis = axes[row][0]
+        axis.scatter(data_target[:, 0], data_target[:, 1], s=1.5, color="0.5", linewidths=0)
+        axis.add_patch(plt.Circle((mean[0], mean[1]), var ** 0.5, fill=False, color="tab:orange", lw=0.8))
+        axis.plot(mean[0], mean[1], "o", color="tab:orange", ms=2)
+        axis.set_ylabel(f"{name}\nN(({mean[0]:.1f}, {mean[1]:.1f}), {var:.1f} I)", fontsize=7)
+        by_variant = {run["variant"]: run for run in group}
+        for column, variant in enumerate(TOY_VARIANTS, start=1):
+            axis, run = axes[row][column], by_variant.get(variant)
+            found = latest_samples(run, direction) if run else None
+            if found is None:
+                axis.text(0.5, 0.5, "no samples yet" if run else "no run", ha="center", va="center", fontsize=7, color="0.5", transform=axis.transAxes)
+            else:
+                tag, npz = found
+                final = np.load(npz)["final"]
+                axis.scatter(target[:, 0], target[:, 1], s=1.5, color="0.78", linewidths=0)
+                axis.scatter(final[:, 0], final[:, 1], s=1.5, color="tab:blue", linewidths=0)
+                energy, n = logged_energy(run, direction, tag), int(tag.split("_")[1])
+                label = (f"{energy:.2f}" if energy is not None else "") + (f"  n={n}" if n != run["n_ipf"] else "")
+                axis.text(0.04, 0.96, label, transform=axis.transAxes, fontsize=7, va="top")
+        for column in range(len(columns)):
+            _toy_axis(axes[row][column])
+    for column, label in enumerate(columns):
+        axes[0][column].set_title(label, fontsize=8)
+    figure.subplots_adjust(left=0.075, right=0.995, top=0.96, bottom=0.005, wspace=0.04, hspace=0.04)
+    figure.savefig(path, dpi=100)
+    plt.close(figure)
+
+
+def draw_toy_energy_strip(groups: list[tuple[str, list[dict]]], path: str):
+    """One panel per group: the energy distance of the backward samples to the data along the IPF iterations."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
     from matplotlib.ticker import MaxNLocator
 
-    figure, axes = plt.subplots(1, 2, figsize=(9, 3.2))
     variant_order = {name: index for index, name in enumerate(TOY_VARIANTS)}
-    for run in runs:
-        rows = run["toy_metrics"]
-        if not rows or not len(rows["n"]):
-            continue
-        label, color = model_label(run), f"C{variant_order.get(run['variant'], 9)}"
-        backward, forward = rows["fb"] == "b", rows["fb"] == "f"
-        if backward.any():
-            axes[0].plot(rows["n"][backward], rows["energy_to_data"][backward], marker="o", ms=3, color=color, label=label)
-        if forward.any():
-            axes[1].plot(rows["n"][forward], rows["energy_to_prior"][forward], marker="o", ms=3, color=color, label=label)
-    axes[0].set_title(f"{distribution}: backward samples vs data"); axes[1].set_title(f"{distribution}: forward samples vs prior")
-    for axis in axes:
-        axis.set_xlabel("IPF iteration n"); axis.set_ylabel("energy distance"); axis.set_yscale("log"); axis.grid(alpha=0.3)
-        axis.xaxis.set_major_locator(MaxNLocator(integer=True))
-        if axis.get_legend_handles_labels()[0]:
-            axis.legend(fontsize=8)
-    figure.tight_layout()
-    figure.savefig(path, dpi=120)
+    figure, axes = plt.subplots(1, len(groups), figsize=(2.3 * len(groups), 2.3), squeeze=False)
+    for axis, (name, group) in zip(axes[0], groups):
+        for run in group:
+            rows = run["toy_metrics"]
+            if not rows or not len(rows["n"]):
+                continue
+            backward = rows["fb"] == "b"
+            if backward.any():
+                axis.plot(rows["n"][backward], rows["energy_to_data"][backward], marker="o", ms=2, lw=1,
+                          color=f"C{variant_order.get(run['variant'], 9)}", label=TOY_VARIANT_LABELS.get(run["variant"], run["variant"]))
+        axis.set_title(name, fontsize=8); axis.set_yscale("log"); axis.grid(alpha=0.3)
+        axis.xaxis.set_major_locator(MaxNLocator(integer=True)); axis.tick_params(labelsize=7)
+        axis.set_xlabel("IPF iteration", fontsize=7)
+    axes[0][0].set_ylabel("energy distance to data", fontsize=7)
+    if axes[0][0].get_legend_handles_labels()[0]:
+        axes[0][0].legend(fontsize=6)
+    figure.tight_layout(pad=0.4)
+    figure.savefig(path, dpi=100)
     plt.close(figure)
 
 
 def toy_tab(runs: list[dict], figures_of: dict, out: Path, cache: FigureCache) -> str:
     toy_runs = [run for run in runs if run["kind"] == "toy"]
     parts = ["<h2>Toy distribution validation</h2>",
-             "<p class='caption'>The two-dimensional distributions of the reference code (bridge/data/two_dim.py) learnt with its "
-             "settings (conf/dataset/2d.yaml: 20 steps of gamma 0.01, 20 IPF iterations of 10 000 steps, batch 512, drift matching, "
-             "no EMA, a fresh network per half-step, prior from the first 100 points) by the reference score network ported to JAX "
-             "(dense) and by the same network with its linear layers replaced by the sparse-transformers layers: st's masked "
-             "SparseLinear with the full support (mask K=full) or fan-in 32 (mask K=32), and z1t's gather SparseLinear with "
-             "fan-in 32 (gather K=32). Each panel shows the 1000 final samples of the latest half-step over the target cloud; the "
-             "energy distance is between those samples and 1000 target points (0 for equal distributions).</p>"]
+             "<p class='caption'>Rows: the distributions of bridge/data/two_dim.py with their priors (orange: mean and one sigma); columns: "
+             "the reference score network (dense) and the same network with its linear layers replaced by sparse-transformers layers "
+             "(st's masked SparseLinear with the full support or fan-in 32, z1t's gather SparseLinear with fan-in 32). Each panel: the "
+             "1000 final backward samples (blue) of the latest half-step over 1000 data points (grey); the number is their energy "
+             "distance, 0 for equal distributions. Settings of conf/dataset/2d.yaml: 20 steps of gamma 0.01, 20 IPF iterations of "
+             "10 000 steps, batch 512, drift matching, no EMA, a fresh network per half-step; the reference prior is the mean and "
+             "variance of the first 100 points, which for the mixture all lie in the left Gaussian; mixturecentred uses the N(0, I) "
+             "prior written in the same yaml.</p>"]
     if not toy_runs:
         return "".join(parts + ["<p class='muted'>no toy runs yet (bash slurm/toy_runs.sh)</p>"])
-    order = {name: index for index, name in enumerate(TOY_DISTRIBUTIONS)}
-    variant_order = {name: index for index, name in enumerate(TOY_VARIANTS)}
-    for run in toy_runs:
-        run["group"] = run["name"].removeprefix("toy_").rsplit("_", 1)[0]
-    groups = sorted({(run["group"], run["distribution"]) for run in toy_runs}, key=lambda item: (order.get(item[1], 99), item[0]))
-    for distribution, _ in [(group, dist) for group, dist in groups]:
-        group = sorted((run for run in toy_runs if run["group"] == distribution),
-                       key=lambda run: (variant_order.get(run["variant"], 99), run["name"]))
-        info = next((run["info"] for run in group if run["info"].get("mean_final_vector")), {})
-        prior = ""
-        if info:
-            mean = ", ".join(f"{value:.2f}" for value in info["mean_final_vector"])
-            prior = f" <span class='muted'>{escape_html(group[0]['distribution'])}, prior N(({mean}), {info['var_final']:.2f} I)</span>"
-        parts.append(f"<h3>{escape_html(distribution)}{prior}</h3>")
-        rows = []
-        for run in group:
-            metrics, latest = run["toy_metrics"], run["latest"]
-            energy_data = energy_prior = ""
-            if metrics and len(metrics["n"]):
-                backward, forward = metrics["fb"] == "b", metrics["fb"] == "f"
-                if backward.any():
-                    energy_data = f"{metrics['energy_to_data'][backward][-1]:.3f} (n={int(metrics['n'][backward][-1])})"
-                if forward.any():
-                    energy_prior = f"{metrics['energy_to_prior'][forward][-1]:.3f} (n={int(metrics['n'][forward][-1])})"
-            info = run["info"]
-            parameters = f"{info['parameters_stored']:,} / {info['parameters_active']:,}" if "parameters_stored" in info else ""
-            rows.append([f"<a href='#run-{escape_html(run['name'])}'>{escape_html(model_label(run))}</a>", parameters,
-                         f"<span class='{run['status_class']}'>{escape_html(run['status'])}</span>",
-                         f"{latest['fb']} n={latest['n']} i={latest['i']:,}" if latest else "",
-                         energy_data, energy_prior, f"{latest['last_10pct_loss']:.5f}" if latest else "", duration(run["elapsed"])])
-        parts.append(table(["model", "parameters stored / active", "status", "half-step", "backward: energy distance to data",
-                            "forward: energy distance to prior", "last-10% loss", "elapsed"], rows))
-        for direction, label in (("b", "backward (prior to data)"), ("f", "forward (data to prior)")):
-            cards = []
-            if direction == "b":
-                data_figure = next((figures_of[run["name"]].get("data") for run in group if figures_of[run["name"]].get("data")), None)
-                cards.append(figure(data_figure, f"{distribution}: data and prior", 300))
-            for run in group:
-                figures = figures_of[run["name"]]
-                caption = f"{model_label(run)}: {figures.get(f'latest_name_{direction}', 'no samples yet')}"
-                cards.append(figure(figures.get(f"samples_{direction}"), caption, 300))
-            parts.append(f"<h4>{escape_html(label)}</h4><div class='cards'>{''.join(cards)}</div>")
-        curves = out / f"toy_{distribution}_energy.png"
-        signature = json.dumps([file_signature(run["dir"] / "logs" / "toy_metrics.csv") for run in group])
-        error = cache.ensure(f"toyenergy:{distribution}", signature, curves,
-                             lambda: render(curves, lambda temporary: draw_energy_curves(group, distribution, temporary)))
+    groups = toy_groups(toy_runs)
+    signature = json.dumps([[run["name"], file_signature(run["dir"] / "logs" / "toy_metrics.csv"),
+                             [str(latest_samples(run, direction)) for direction in "bf"], run["info"].get("var_final")]
+                            for _, group in groups for run in group])
+    for direction, width in (("b", 850), ("f", 850)):
+        matrix = out / f"toy_matrix_{direction}.png"
+        error = cache.ensure(f"toymatrix:{direction}", signature, matrix,
+                             lambda: render(matrix, lambda temporary: draw_toy_matrix(groups, direction, temporary)))
         if error:
             parts.append(f"<p class='warn'>{escape_html(error)}</p>")
-        parts.append("<h4>Energy distance along the IPF iterations</h4>" +
-                     figure(curves if curves.exists() else None, f"{distribution}: energy distance of the final samples, one line per model; "
-                            "n = 0 is the reference Ornstein-Uhlenbeck chain", 900))
+    strip = out / "toy_energy.png"
+    error = cache.ensure("toyenergy", signature, strip, lambda: render(strip, lambda temporary: draw_toy_energy_strip(groups, temporary)))
+    if error:
+        parts.append(f"<p class='warn'>{escape_html(error)}</p>")
+    matrix_b, matrix_f = out / "toy_matrix_b.png", out / "toy_matrix_f.png"
+    parts.append(figure(matrix_b if matrix_b.exists() else None, "backward samples (prior to data) over the data", 850))
+    parts.append(figure(strip if strip.exists() else None, "energy distance of the backward samples to the data along the IPF iterations", 1150))
+    header = ["distribution"] + [TOY_VARIANT_LABELS[variant] for variant in TOY_VARIANTS]
+    rows = []
+    for name, group in groups:
+        by_variant = {run["variant"]: run for run in group}
+        cells = [escape_html(name)]
+        for variant in TOY_VARIANTS:
+            run = by_variant.get(variant)
+            if run is None:
+                cells.append("")
+                continue
+            metrics, latest = run["toy_metrics"], run["latest"]
+            text = ""
+            if metrics and len(metrics["n"]) and (metrics["fb"] == "b").any():
+                backward = metrics["fb"] == "b"
+                values, iterations = metrics["energy_to_data"][backward], metrics["n"][backward]
+                best = int(np.argmin(values))
+                text = f"{values[-1]:.2f} (best {values[best]:.2f} at n={int(iterations[best])})"
+            if run["status"] != "finished":
+                text += f" <span class='{run['status_class']}'>{escape_html(run['status'])}" + (f", {latest['fb']} n={latest['n']}" if latest else "") + "</span>"
+            cells.append(f"<a href='#run-{escape_html(run['name'])}'>{text or 'no samples yet'}</a>")
+        rows.append(cells)
+    parts.append("<p class='caption'>Energy distance of the backward samples to the data after the last half-step, and the best iteration.</p>" + table(header, rows))
+    parts.append("<details><summary>Forward direction: final samples of the forward half-steps (data to prior) over prior samples</summary>" +
+                 figure(matrix_f if matrix_f.exists() else None, "forward samples over 1000 prior samples; the number is the energy distance to the prior", 850) +
+                 "</details>")
     return "".join(parts)
 
 
