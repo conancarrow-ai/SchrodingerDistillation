@@ -184,6 +184,31 @@ target and the chains of 12 particles. The dashboard tab "Toy distribution valid
 networks side by side for every distribution with those figures, the energy distance along the IPF
 iterations and a summary table.
 
+### Results (`report/toy/`, 20 runs of 6 to 9 minutes on one GPU each)
+
+Energy distance of the 1000 backward samples to 1000 data points after the last IPF iteration (n = 20)
+and at the best iteration, by distribution and network. The reference chain (n = 0, the
+Ornstein-Uhlenbeck forward chain) gives the scale: 0.36 (moon), 0.61 (scurve), 0.39 (circle), 4.59
+(mixture), 3.37 (mixture, centred prior).
+
+| distribution | dense | mask K=full | mask K=32 | gather K=32 |
+|---|---|---|---|---|
+| moon | 0.53 (best 0.34, n = 11) | 0.41 (0.28, n = 9) | 0.53 (0.39, n = 3) | 0.59 (0.43, n = 3) |
+| scurve | 0.26 (0.24, n = 11) | 0.19 (0.19, n = 20) | 0.18 (0.18, n = 20) | 0.18 (0.18, n = 20) |
+| circle | 0.29 (0.14, n = 3) | 0.18 (0.12, n = 11) | 0.10 (0.10, n = 20) | 0.20 (0.17, n = 7) |
+| mixture, reference prior | 4.60 (4.55, n = 10) | 4.38 (4.31, n = 15) | 4.79 (4.74, n = 18) | 4.51 (4.51, n = 19) |
+| mixture, prior N(0, I) | 0.21 (0.11, n = 10) | 0.19 (0.02, n = 10) | 0.22 (0.07, n = 10) | 0.19 (0.04, n = 10) |
+
+The sparse-transformers networks learn moon, scurve and circle as well as the reference network; with
+fan-in 32 (9 922 of 26 498 weights active) the samples trace the S curve and both circles as closely as
+the dense network's. The distances fluctuate from iteration to iteration because every half-step trains
+a fresh network, and for moon and circle they rise again after about ten iterations, for every network
+alike. With the literal 2d.yaml settings the mixture is not learnt by any network: `final_adaptive`
+takes the prior from the first 100 points, which are all drawn from the left Gaussian, so the prior
+N((-7.07, 0.10), 13.85 I) sits on the left mode and the backward samples stay there. The extra group
+"mixturecentred" uses the prior N(0, I) written in the same yaml (`ipf.final_adaptive=false`); then all
+four networks recover both modes, with energy distances of 0.02 to 0.11 at n = 10 and about 0.2 at n = 20.
+
 ## Findings: where the port and the reference differ
 
 None of these changes a compared number beyond the tolerances above; the tests

@@ -120,6 +120,10 @@ Part 4 of `docs/validation.md` learns the toy distributions of the reference cod
 concentric circles, mixture of Gaussians) with the reference score network and with its linear layers
 replaced by sparse-transformers layers (`configs/toy.yaml`, `bash slurm/toy_runs.sh`); the dashboard tab
 "Toy distribution validation" shows them side by side.
+Outcome (`report/toy/energy_distances.md`): the sparse networks (st masked layers with the full support
+or fan-in 32, z1t gather layers with fan-in 32) learn moon, S curve and circle as well as the dense
+reference network; the mixture is learnt by all of them once the prior is centred, and by none of them
+with the reference's first-100-points prior, which sits on the left mode.
 
 ### Dashboard (`docs/dashboard.md`)
 
