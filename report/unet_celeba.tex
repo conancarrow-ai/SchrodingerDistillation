@@ -48,43 +48,43 @@ $s_\theta:\R^{3\times64\times64}\times\R\to\R^{3\times64\times64}$,\quad $(x,t)\
   lanelab/.style={font=\scriptsize, inner sep=1pt},
   tensor/.style={font=\scriptsize, inner sep=1pt}]
   % lanes: spatial size of the feature map
-  \foreach \y/\t in {1.86/$64^2$, 1.24/$32^2$, 0.62/$16^2$, 0/$8^2$} {
+  \foreach \y/\t in {2.04/$64^2$, 1.36/$32^2$, 0.68/$16^2$, 0/$8^2$} {
     \draw[lane, dotted, line width=0.4pt] (-0.02,\y) -- (7.15,\y);
     \node[lanelab, anchor=east] at (-0.06,\y) {\t};
   }
   % lane 64^2
-  \node[tensor] (x) at (0.12,1.86) {$x$};
-  \node[comp] (s0) at (0.6,1.86) {$C_{3\to64}$};
-  \node[comp] (e1a) at (1.18,1.86) {$R_{64\to64}$};
-  \node[comp] (e1b) at (1.76,1.86) {$R_{64\to64}$};
-  \node[comp] (g1a) at (4.2,1.86) {$R_{192\to64}$};
-  \node[comp] (g1b) at (4.9,1.86) {$R_{128\to64}$};
-  \node[comp] (g1c) at (5.6,1.86) {$R_{128\to64}$};
-  \node[sub, minimum width=0.24in] (hn) at (6.1,1.86) {$N_{64}$};
-  \node[free, minimum width=0.17in] (hs) at (6.38,1.86) {$\sigma$};
-  \node[comp] (hc) at (6.76,1.86) {$C_{64\to3}$};
-  \node[tensor] (y) at (7.16,1.86) {$y$};
+  \node[tensor] (x) at (0.12,2.04) {$x$};
+  \node[comp] (s0) at (0.6,2.04) {$C_{3\to64}$};
+  \node[comp] (e1a) at (1.18,2.04) {$R_{64\to64}$};
+  \node[comp] (e1b) at (1.8,2.04) {$R_{64\to64}$};
+  \node[comp] (g1a) at (4.2,2.04) {$R_{192\to64}$};
+  \node[comp] (g1b) at (4.9,2.04) {$R_{128\to64}$};
+  \node[comp] (g1c) at (5.6,2.04) {$R_{128\to64}$};
+  \node[sub, minimum width=0.24in] (hn) at (6.1,2.04) {$N_{64}$};
+  \node[free, minimum width=0.17in] (hs) at (6.38,2.04) {$\sigma$};
+  \node[comp] (hc) at (6.76,2.04) {$C_{64\to3}$};
+  \node[tensor] (y) at (7.16,2.04) {$y$};
   % lane 32^2
-  \node[comp] (d2) at (0.6,1.24) {$D_{64}$};
-  \node[comp] (e2a) at (1.18,1.24) {$R_{64\to128}$};
-  \node[comp] (e2b) at (1.76,1.24) {$R_{128\to128}$};
-  \node[comp] (g2a) at (4.2,1.24) {$R_{320\to128}$};
-  \node[comp] (g2b) at (4.9,1.24) {$R_{256\to128}$};
-  \node[comp] (g2c) at (5.6,1.24) {$R_{192\to128}$};
-  \node[comp] (u2) at (6.2,1.24) {$U_{128}$};
+  \node[comp] (d2) at (0.6,1.36) {$D_{64}$};
+  \node[comp] (e2a) at (1.18,1.36) {$R_{64\to128}$};
+  \node[comp] (e2b) at (1.8,1.36) {$R_{128\to128}$};
+  \node[comp] (g2a) at (4.2,1.36) {$R_{320\to128}$};
+  \node[comp] (g2b) at (4.9,1.36) {$R_{256\to128}$};
+  \node[comp] (g2c) at (5.6,1.36) {$R_{192\to128}$};
+  \node[comp] (u2) at (6.2,1.36) {$U_{128}$};
   % lane 16^2
-  \node[comp] (d3) at (0.6,0.62) {$D_{128}$};
-  \node[comp] (e3a) at (1.18,0.62) {$R_{128\to192}$};
-  \node[comp] (e3b) at (1.76,0.62) {$R_{192\to192}$};
-  \node[comp] (g3a) at (4.2,0.62) {$R_{448\to192}$};
-  \node[comp] (g3b) at (4.9,0.62) {$R_{384\to192}$};
-  \node[comp] (g3c) at (5.6,0.62) {$R_{320\to192}$};
-  \node[comp] (u3) at (6.2,0.62) {$U_{192}$};
+  \node[comp] (d3) at (0.6,0.68) {$D_{128}$};
+  \node[comp] (e3a) at (1.18,0.68) {$R_{128\to192}$};
+  \node[comp] (e3b) at (1.8,0.68) {$R_{192\to192}$};
+  \node[comp] (g3a) at (4.2,0.68) {$R_{448\to192}$};
+  \node[comp] (g3b) at (4.9,0.68) {$R_{384\to192}$};
+  \node[comp] (g3c) at (5.6,0.68) {$R_{320\to192}$};
+  \node[comp] (u3) at (6.2,0.68) {$U_{192}$};
   % lane 8^2
   \node[comp] (d4) at (0.6,0) {$D_{192}$};
   \node[comp] (e4a) at (1.18,0) {$R_{192\to256}$};
-  \node[comp] (e4b) at (1.76,0) {$R_{256\to256}$};
-  \node[comp] (m1) at (2.32,0) {$R_{256\to256}$};
+  \node[comp] (e4b) at (1.8,0) {$R_{256\to256}$};
+  \node[comp] (m1) at (2.42,0) {$R_{256\to256}$};
   \node[comp] (m2) at (2.9,0) {$A_{256}$};
   \node[comp] (m3) at (3.48,0) {$R_{256\to256}$};
   \node[comp] (g4a) at (4.2,0) {$R_{512\to256}$};
@@ -101,22 +101,22 @@ $s_\theta:\R^{3\times64\times64}\times\R\to\R^{3\times64\times64}$,\quad $(x,t)\
   \draw[->] (g1c) -- (hn); \draw[->] (hn) -- (hs); \draw[->] (hs) -- (hc); \draw[->] (hc) -- (y);
   \draw[->] (e4b) -- (m1); \draw[->] (m1) -- (m2); \draw[->] (m2) -- (m3); \draw[->] (m3) -- (c4a);
   % resolution changes
-  \draw[->, rounded corners=2pt] (e1b.south) -- ++(0,-0.06) -| (d2.north);
-  \draw[->, rounded corners=2pt] (e2b.south) -- ++(0,-0.06) -| (d3.north);
-  \draw[->, rounded corners=2pt] (e3b.south) -- ++(0,-0.06) -| (d4.north);
-  \draw[->, rounded corners=2pt] (u4.north) -- ++(0,0.32) -| (c3a.south);
-  \draw[->, rounded corners=2pt] (u3.north) -- ++(0,0.32) -| (c2a.south);
-  \draw[->, rounded corners=2pt] (u2.north) -- ++(0,0.32) -| (c1a.south);
+  \draw[->, rounded corners=2pt] (e1b.south) -- ++(0,-0.04) -| (d2.north);
+  \draw[->, rounded corners=2pt] (e2b.south) -- ++(0,-0.04) -| (d3.north);
+  \draw[->, rounded corners=2pt] (e3b.south) -- ++(0,-0.04) -| (d4.north);
+  \draw[->, rounded corners=2pt] (u4.north) -- ++(0,0.40) -| (c3a.south);
+  \draw[->, rounded corners=2pt] (u3.north) -- ++(0,0.40) -| (c2a.south);
+  \draw[->, rounded corners=2pt] (u2.north) -- ++(0,0.40) -| (c1a.south);
   % skips: nested arcs from the encoder outputs to the concatenation nodes
   \foreach \l/\src/\n in {1/s0/64, 2/d2/64, 3/d3/128, 4/d4/192} {
-    \draw[->, rounded corners=2pt] ($(\src.north)+(0.1,0)$) -- ++(0,0.36) -| (c\l c.north);
-    \node[lab, anchor=west] at ($(\src.north)+(0.13,0.17)$) {\n};
+    \draw[->, rounded corners=2pt] ($(\src.north)+(0.1,0)$) -- ++(0,0.33) -| (c\l c.north);
+    \node[lab, anchor=west] at ($(\src.north)+(0.13,0.14)$) {\n};
   }
   \foreach \l/\n in {1/64, 2/128, 3/192, 4/256} {
-    \draw[->, rounded corners=2pt] ($(e\l a.north)+(0.1,0)$) -- ++(0,0.29) -| (c\l b.north);
-    \node[lab, anchor=west] at ($(e\l a.north)+(0.13,0.17)$) {\n};
-    \draw[->, rounded corners=2pt] ($(e\l b.north)+(0.1,0)$) -- ++(0,0.22) -| (c\l a.north);
-    \node[lab, anchor=west] at ($(e\l b.north)+(0.13,0.17)$) {\n};
+    \draw[->, rounded corners=2pt] ($(e\l a.north)+(0.1,0)$) -- ++(0,0.27) -| (c\l b.north);
+    \node[lab, anchor=west] at ($(e\l a.north)+(0.13,0.14)$) {\n};
+    \draw[->, rounded corners=2pt] ($(e\l b.north)+(0.1,0)$) -- ++(0,0.21) -| (c\l a.north);
+    \node[lab, anchor=west] at ($(e\l b.north)+(0.13,0.14)$) {\n};
   }
   % time embedding
   \node[tensor] (t) at (0.12,-0.44) {$t$};
@@ -168,32 +168,32 @@ $s_\theta:\R^{3\times64\times64}\times\R\to\R^{3\times64\times64}$,\quad $(x,t)\
   \node[frame, fit=(ax)(axo)(an)(askip)] (afr) {};
   \node[tab] at ($(afr.north west)+(0.02,-0.005)$) {$A_a$};
   % convolution, downsampling and upsampling, opened
-  \node[tensor] (ch) at (0.5,-2.1) {$h$};
-  \node[free, minimum width=0.2in] (cp) at (0.84,-2.1) {$\unf$};
-  \node[lin] (cl) at (1.26,-2.1) {$L_{9a\to b}$};
-  \node[tensor] (cho) at (1.64,-2.1) {$h'$};
+  \node[tensor] (ch) at (0.5,-2.16) {$h$};
+  \node[free, minimum width=0.2in] (cp) at (0.84,-2.16) {$\unf$};
+  \node[lin] (cl) at (1.26,-2.16) {$L_{9a\to b}$};
+  \node[tensor] (cho) at (1.64,-2.16) {$h'$};
   \draw[->] (ch) -- (cp); \draw[->] (cp) -- (cl); \draw[->] (cl) -- (cho);
   \node[frame, fit=(ch)(cp)(cl)(cho)] (cfr) {};
   \node[tab] at ($(cfr.north west)+(0.02,-0.005)$) {$C_{a\to b}$};
-  \node[tensor] (dh) at (2.1,-2.1) {$h$};
-  \node[free, minimum width=0.2in] (dp) at (2.46,-2.1) {$\unf^{\downarrow}$};
-  \node[lin] (dl) at (2.9,-2.1) {$L_{9a\to a}$};
-  \node[tensor] (dho) at (3.28,-2.1) {$h'$};
+  \node[tensor] (dh) at (2.1,-2.16) {$h$};
+  \node[free, minimum width=0.2in] (dp) at (2.46,-2.16) {$\unf^{\downarrow}$};
+  \node[lin] (dl) at (2.9,-2.16) {$L_{9a\to a}$};
+  \node[tensor] (dho) at (3.28,-2.16) {$h'$};
   \draw[->] (dh) -- (dp); \draw[->] (dp) -- (dl); \draw[->] (dl) -- (dho);
   \node[frame, fit=(dh)(dp)(dl)(dho)] (dfr) {};
   \node[tab] at ($(dfr.north west)+(0.02,-0.005)$) {$D_a$};
-  \node[tensor] (uh) at (3.75,-2.1) {$h$};
-  \node[free, minimum width=0.2in] (uu) at (4.08,-2.1) {$\uparrow_2$};
-  \node[free, minimum width=0.2in] (up) at (4.44,-2.1) {$\unf$};
-  \node[lin] (ul) at (4.86,-2.1) {$L_{9a\to a}$};
+  \node[tensor] (uh) at (4.95,-2.16) {$h$};
+  \node[free, minimum width=0.2in] (uu) at (5.28,-2.16) {$\uparrow_2$};
+  \node[free, minimum width=0.2in] (up) at (5.64,-2.16) {$\unf$};
+  \node[lin] (ul) at (6.06,-2.16) {$L_{9a\to a}$};
   \node[frame, fit=(up)(ul)] (uc) {};
   \node[tab] (uct) at ($(uc.north west)+(0.02,-0.005)$) {$C_{a\to a}$};
-  \node[tensor] (uho) at (5.3,-2.1) {$h'$};
+  \node[tensor] (uho) at (6.5,-2.16) {$h'$};
   \draw[->] (uh) -- (uu); \draw[->] (uu) -- (up); \draw[->] (up) -- (ul); \draw[->] (ul) -- (uho);
   \node[frame, fit=(uh)(uu)(uc)(uct)(uho)] (ufr) {};
   \node[tab] at ($(ufr.north west)+(0.02,-0.005)$) {$U_a$};
   % legend
-  \node[anchor=north west, font=\scriptsize, text width=7.3in, align=left, inner sep=0pt] at (-0.3,-2.36)
+  \node[anchor=north west, font=\scriptsize, text width=7.3in, align=left, inner sep=0pt] at (-0.3,-2.42)
     {\swg\ object of a sparse-transformers class ($S_\kappa$, $\kappa\le n$)\quad
      \swo\ sparsifiable, not trivially mappable: none\quad
      \swn\ parameter-free\\
