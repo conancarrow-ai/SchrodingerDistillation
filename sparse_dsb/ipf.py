@@ -185,7 +185,7 @@ class ToyProblem:
         self.metrics = CSVLog(os.path.join(out_dir, "logs", "toy_metrics.csv"),
                               ["fb", "n", "i", "energy_to_data", "energy_to_prior", "mean_x", "mean_y", "var"])
         draw_points(os.path.join(out_dir, "im", "data.png"), self.data_target, self.mean_final, self.var_final,
-                    f"data ({count} of {self.array.shape[0]} points), prior mean and sigma")
+                    "data, prior mean and sigma")
 
     def sample(self, key, array, batch_size: int):
         index = jax.random.choice(key, array.shape[0], (batch_size,), replace=False)
