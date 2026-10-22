@@ -449,10 +449,23 @@ def copy_latest(run: dict, out: Path, cache: FigureCache, note, key: str, source
     return target if target.exists() else None
 
 
+def draw_toy_data(run: dict, path: str):
+    """The training points of a toy run, regenerated from its config, with the prior of info.json."""
+    from .toy import draw_points, toy_points
+
+    data, info = run["config"].get("data") or {}, run["info"]
+    points = toy_points(data["distribution"], int(data.get("npar", 10000)), int(data.get("seed", 0)))
+    sample = points[np.random.default_rng(1).choice(points.shape[0], min(1000, points.shape[0]), replace=False)]
+    draw_points(path, sample, info.get("mean_final_vector", [0.0, 0.0]), float(info.get("var_final", 1.0)), "data, prior mean and sigma")
+
+
 def toy_run_figures(run: dict, out: Path, cache: FigureCache, figures: dict, note) -> dict:
     name, run_dir = run["name"], run["dir"]
-    data_png = run_dir / "im" / "data.png"
-    figures["data"] = copy_latest(run, out, cache, note, "toydata", data_png if data_png.exists() else None, out / f"{name}_data.png")
+    data_path = out / f"{name}_data.png"
+    if run["info"] and run["distribution"]:
+        signature = json.dumps([run["config"].get("data"), run["info"].get("mean_final_vector"), run["info"].get("var_final")])
+        note(cache.ensure(f"toydata:{name}", signature, data_path, lambda: render(data_path, lambda temporary: draw_toy_data(run, temporary))))
+    figures["data"] = data_path if data_path.exists() else None
     for direction in ("b", "f"):
         for filename, kind in (("samples.png", "samples"), ("trajectories.png", "chains")):
             files = grid_files(run_dir, direction, filename)
@@ -472,21 +485,26 @@ def draw_energy_curves(runs: list[dict], distribution: str, path: str):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    from matplotlib.ticker import MaxNLocator
+
     figure, axes = plt.subplots(1, 2, figsize=(9, 3.2))
+    variant_order = {name: index for index, name in enumerate(TOY_VARIANTS)}
     for run in runs:
         rows = run["toy_metrics"]
         if not rows or not len(rows["n"]):
             continue
-        label = model_label(run)
+        label, color = model_label(run), f"C{variant_order.get(run['variant'], 9)}"
         backward, forward = rows["fb"] == "b", rows["fb"] == "f"
         if backward.any():
-            axes[0].plot(rows["n"][backward], rows["energy_to_data"][backward], marker="o", ms=3, label=label)
+            axes[0].plot(rows["n"][backward], rows["energy_to_data"][backward], marker="o", ms=3, color=color, label=label)
         if forward.any():
-            axes[1].plot(rows["n"][forward], rows["energy_to_prior"][forward], marker="o", ms=3, label=label)
+            axes[1].plot(rows["n"][forward], rows["energy_to_prior"][forward], marker="o", ms=3, color=color, label=label)
     axes[0].set_title(f"{distribution}: backward samples vs data"); axes[1].set_title(f"{distribution}: forward samples vs prior")
     for axis in axes:
         axis.set_xlabel("IPF iteration n"); axis.set_ylabel("energy distance"); axis.set_yscale("log"); axis.grid(alpha=0.3)
-    axes[0].legend(fontsize=8)
+        axis.xaxis.set_major_locator(MaxNLocator(integer=True))
+        if axis.get_legend_handles_labels()[0]:
+            axis.legend(fontsize=8)
     figure.tight_layout()
     figure.savefig(path, dpi=120)
     plt.close(figure)
