@@ -6,7 +6,7 @@
 \usepackage{booktabs,array}
 \usepackage{xcolor}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,calc}
+\usetikzlibrary{arrows.meta,positioning,calc,fit}
 \pagestyle{empty}
 \setlength{\parindent}{0pt}
 
@@ -22,7 +22,6 @@
 \newcommand{\swo}{\sw{ofill}{oframe}}
 \newcommand{\swb}{\sw{bfill}{bframe}}
 \newcommand{\swn}{\sw{nfill}{nframe}}
-\newcommand{\sww}{\sw{white}{black}}
 \newcommand{\swd}{\tikz[baseline=-0.5ex]\draw[dashed,gframe,fill=gfill,line width=0.4pt] (0,-0.45ex) rectangle (1.3ex,0.85ex);}
 \newcommand{\unf}{\mathcal{P}}
 
@@ -31,7 +30,7 @@
 {\large\scshape U-Net, CelebA $64\times64$}\quad
 $s_\theta:\R^{3\times64\times64}\times\R\to\R^{3\times64\times64}$,\quad $(x,t)\mapsto y$,\quad $20\,972\,867$ parameters.
 
-\vspace{1pt}
+\vspace{5pt}
 \makebox[\textwidth][c]{\begin{tikzpicture}[x=1in,y=1in,
   >={Stealth[length=3pt,width=2.4pt]},
   every path/.style={line width=0.5pt},
@@ -41,178 +40,194 @@ $s_\theta:\R^{3\times64\times64}\times\R\to\R^{3\times64\times64}$,\quad $(x,t)\
   sub/.style={box, draw=bframe, fill=bfill},
   free/.style={box, draw=nframe, fill=nfill},
   skipmap/.style={box, draw=gframe, fill=gfill, dashed},
-  op/.style={circle, draw=black!70, line width=0.5pt, fill=white, inner sep=0pt, minimum size=8pt, font=\scriptsize},
-  cat/.style={op, minimum size=7.5pt, font=\tiny},
+  op/.style={circle, draw=nframe, line width=0.5pt, fill=nfill, inner sep=0pt, minimum size=8pt, font=\scriptsize},
+  cat/.style={op, minimum size=7pt, font=\tiny},
   lab/.style={font=\tiny, text=black!70, inner sep=1pt},
+  frame/.style={draw=black, line width=0.5pt, rounded corners=2pt, inner sep=2.5pt},
+  tab/.style={draw=black, fill=white, line width=0.5pt, rounded corners=1.5pt, font=\scriptsize, inner xsep=2.5pt, inner ysep=1pt, anchor=south west},
   lanelab/.style={font=\scriptsize, inner sep=1pt},
   tensor/.style={font=\scriptsize, inner sep=1pt}]
   % lanes: spatial size of the feature map
-  \foreach \y/\t in {2.1/$64^2$, 1.4/$32^2$, 0.7/$16^2$, 0/$8^2$} {
-    \draw[lane, dotted, line width=0.4pt] (-0.02,\y) -- (7.0,\y);
+  \foreach \y/\t in {1.86/$64^2$, 1.24/$32^2$, 0.62/$16^2$, 0/$8^2$} {
+    \draw[lane, dotted, line width=0.4pt] (-0.02,\y) -- (7.15,\y);
     \node[lanelab, anchor=east] at (-0.06,\y) {\t};
   }
   % lane 64^2
-  \node[tensor] (x) at (0.12,2.1) {$x$};
-  \node[comp] (s0) at (0.6,2.1) {$C_{3\to64}$};
-  \node[comp] (e1a) at (1.18,2.1) {$R_{64\to64}$};
-  \node[comp] (e1b) at (1.76,2.1) {$R_{64\to64}$};
-  \node[comp] (g1a) at (4.26,2.1) {$R_{192\to64}$};
-  \node[comp] (g1b) at (4.84,2.1) {$R_{128\to64}$};
-  \node[comp] (g1c) at (5.42,2.1) {$R_{128\to64}$};
-  \node[sub, minimum width=0.24in] (hn) at (5.9,2.1) {$N_{64}$};
-  \node[free, minimum width=0.17in] (hs) at (6.18,2.1) {$\sigma$};
-  \node[comp] (hc) at (6.56,2.1) {$C^{\circ}_{64\to3}$};
-  \node[tensor] (y) at (6.96,2.1) {$y$};
+  \node[tensor] (x) at (0.12,1.86) {$x$};
+  \node[comp] (s0) at (0.6,1.86) {$C_{3\to64}$};
+  \node[comp] (e1a) at (1.18,1.86) {$R_{64\to64}$};
+  \node[comp] (e1b) at (1.76,1.86) {$R_{64\to64}$};
+  \node[comp] (g1a) at (4.2,1.86) {$R_{192\to64}$};
+  \node[comp] (g1b) at (4.9,1.86) {$R_{128\to64}$};
+  \node[comp] (g1c) at (5.6,1.86) {$R_{128\to64}$};
+  \node[sub, minimum width=0.24in] (hn) at (6.1,1.86) {$N_{64}$};
+  \node[free, minimum width=0.17in] (hs) at (6.38,1.86) {$\sigma$};
+  \node[comp] (hc) at (6.76,1.86) {$C_{64\to3}$};
+  \node[tensor] (y) at (7.16,1.86) {$y$};
   % lane 32^2
-  \node[comp] (d2) at (0.6,1.4) {$D_{64}$};
-  \node[comp] (e2a) at (1.18,1.4) {$R_{64\to128}$};
-  \node[comp] (e2b) at (1.76,1.4) {$R_{128\to128}$};
-  \node[comp] (g2a) at (4.26,1.4) {$R_{320\to128}$};
-  \node[comp] (g2b) at (4.84,1.4) {$R_{256\to128}$};
-  \node[comp] (g2c) at (5.42,1.4) {$R_{192\to128}$};
-  \node[comp] (u2) at (6.0,1.4) {$U_{128}$};
+  \node[comp] (d2) at (0.6,1.24) {$D_{64}$};
+  \node[comp] (e2a) at (1.18,1.24) {$R_{64\to128}$};
+  \node[comp] (e2b) at (1.76,1.24) {$R_{128\to128}$};
+  \node[comp] (g2a) at (4.2,1.24) {$R_{320\to128}$};
+  \node[comp] (g2b) at (4.9,1.24) {$R_{256\to128}$};
+  \node[comp] (g2c) at (5.6,1.24) {$R_{192\to128}$};
+  \node[comp] (u2) at (6.2,1.24) {$U_{128}$};
   % lane 16^2
-  \node[comp] (d3) at (0.6,0.7) {$D_{128}$};
-  \node[comp] (e3a) at (1.18,0.7) {$R_{128\to192}$};
-  \node[comp] (e3b) at (1.76,0.7) {$R_{192\to192}$};
-  \node[comp] (g3a) at (4.26,0.7) {$R_{448\to192}$};
-  \node[comp] (g3b) at (4.84,0.7) {$R_{384\to192}$};
-  \node[comp] (g3c) at (5.42,0.7) {$R_{320\to192}$};
-  \node[comp] (u3) at (6.0,0.7) {$U_{192}$};
+  \node[comp] (d3) at (0.6,0.62) {$D_{128}$};
+  \node[comp] (e3a) at (1.18,0.62) {$R_{128\to192}$};
+  \node[comp] (e3b) at (1.76,0.62) {$R_{192\to192}$};
+  \node[comp] (g3a) at (4.2,0.62) {$R_{448\to192}$};
+  \node[comp] (g3b) at (4.9,0.62) {$R_{384\to192}$};
+  \node[comp] (g3c) at (5.6,0.62) {$R_{320\to192}$};
+  \node[comp] (u3) at (6.2,0.62) {$U_{192}$};
   % lane 8^2
   \node[comp] (d4) at (0.6,0) {$D_{192}$};
   \node[comp] (e4a) at (1.18,0) {$R_{192\to256}$};
   \node[comp] (e4b) at (1.76,0) {$R_{256\to256}$};
-  \node[comp] (m1) at (2.42,0) {$R_{256\to256}$};
-  \node[comp] (m2) at (3.0,0) {$A_{256}$};
-  \node[comp] (m3) at (3.58,0) {$R_{256\to256}$};
-  \node[comp] (g4a) at (4.26,0) {$R_{512\to256}$};
-  \node[comp] (g4b) at (4.84,0) {$R_{512\to256}$};
-  \node[comp] (g4c) at (5.42,0) {$R_{448\to256}$};
-  \node[comp] (u4) at (6.0,0) {$U_{256}$};
+  \node[comp] (m1) at (2.32,0) {$R_{256\to256}$};
+  \node[comp] (m2) at (2.9,0) {$A_{256}$};
+  \node[comp] (m3) at (3.48,0) {$R_{256\to256}$};
+  \node[comp] (g4a) at (4.2,0) {$R_{512\to256}$};
+  \node[comp] (g4b) at (4.9,0) {$R_{512\to256}$};
+  \node[comp] (g4c) at (5.6,0) {$R_{448\to256}$};
+  \node[comp] (u4) at (6.2,0) {$U_{256}$};
+  % concatenation nodes on the incoming edge of every decoder block
+  \foreach \l in {1,2,3,4} { \foreach \b in {a,b,c} { \node[cat] (c\l\b) at ($(g\l\b.west)+(-0.045,0)$) {$\Vert$}; } }
   % lane edges
   \draw[->] (x) -- (s0); \draw[->] (s0) -- (e1a); \draw[->] (e1a) -- (e1b);
-  \draw[->] (g1a) -- (g1b); \draw[->] (g1b) -- (g1c); \draw[->] (g1c) -- (hn); \draw[->] (hn) -- (hs); \draw[->] (hs) -- (hc); \draw[->] (hc) -- (y);
-  \foreach \l in {2,3,4} { \draw[->] (d\l) -- (e\l a); \draw[->] (e\l a) -- (e\l b); \draw[->] (g\l a) -- (g\l b); \draw[->] (g\l b) -- (g\l c); \draw[->] (g\l c) -- (u\l); }
-  \draw[->] (e4b) -- (m1); \draw[->] (m1) -- (m2); \draw[->] (m2) -- (m3); \draw[->] (m3) -- (g4a);
+  \foreach \l in {2,3,4} { \draw[->] (d\l) -- (e\l a); \draw[->] (e\l a) -- (e\l b); }
+  \foreach \l in {1,2,3,4} { \draw[->] (g\l a) -- (c\l b); \draw[->] (g\l b) -- (c\l c); }
+  \foreach \l in {2,3,4} { \draw[->] (g\l c) -- (u\l); }
+  \draw[->] (g1c) -- (hn); \draw[->] (hn) -- (hs); \draw[->] (hs) -- (hc); \draw[->] (hc) -- (y);
+  \draw[->] (e4b) -- (m1); \draw[->] (m1) -- (m2); \draw[->] (m2) -- (m3); \draw[->] (m3) -- (c4a);
   % resolution changes
-  \draw[->, rounded corners=2pt] (e1b.south) -- ++(0,-0.08) -| (d2.north);
-  \draw[->, rounded corners=2pt] (e2b.south) -- ++(0,-0.08) -| (d3.north);
-  \draw[->, rounded corners=2pt] (e3b.south) -- ++(0,-0.08) -| (d4.north);
-  \draw[->, rounded corners=2pt] (u4.north) -- ++(0,0.38) -| (g3a.south);
-  \draw[->, rounded corners=2pt] (u3.north) -- ++(0,0.38) -| (g2a.south);
-  \draw[->, rounded corners=2pt] (u2.north) -- ++(0,0.38) -| (g1a.south);
-  % skips: concatenation nodes on the decoder blocks, nested arcs from the encoder outputs
-  \foreach \l in {1,2,3,4} { \foreach \b in {a,b,c} { \node[cat, anchor=south] (c\l\b) at (g\l\b.north) {$\Vert$}; } }
+  \draw[->, rounded corners=2pt] (e1b.south) -- ++(0,-0.06) -| (d2.north);
+  \draw[->, rounded corners=2pt] (e2b.south) -- ++(0,-0.06) -| (d3.north);
+  \draw[->, rounded corners=2pt] (e3b.south) -- ++(0,-0.06) -| (d4.north);
+  \draw[->, rounded corners=2pt] (u4.north) -- ++(0,0.32) -| (c3a.south);
+  \draw[->, rounded corners=2pt] (u3.north) -- ++(0,0.32) -| (c2a.south);
+  \draw[->, rounded corners=2pt] (u2.north) -- ++(0,0.32) -| (c1a.south);
+  % skips: nested arcs from the encoder outputs to the concatenation nodes
   \foreach \l/\src/\n in {1/s0/64, 2/d2/64, 3/d3/128, 4/d4/192} {
-    \draw[->, rounded corners=2pt] ($(\src.north)+(0.1,0)$) -- ++(0,0.42) -| (c\l c.north);
-    \node[lab, anchor=west] at ($(\src.north)+(0.13,0.22)$) {\n};
+    \draw[->, rounded corners=2pt] ($(\src.north)+(0.1,0)$) -- ++(0,0.36) -| (c\l c.north);
+    \node[lab, anchor=west] at ($(\src.north)+(0.13,0.17)$) {\n};
   }
   \foreach \l/\n in {1/64, 2/128, 3/192, 4/256} {
-    \draw[->, rounded corners=2pt] ($(e\l a.north)+(0.1,0)$) -- ++(0,0.35) -| (c\l b.north);
-    \node[lab, anchor=west] at ($(e\l a.north)+(0.13,0.22)$) {\n};
-    \draw[->, rounded corners=2pt] ($(e\l b.north)+(0.1,0)$) -- ++(0,0.28) -| (c\l a.north);
-    \node[lab, anchor=west] at ($(e\l b.north)+(0.13,0.22)$) {\n};
+    \draw[->, rounded corners=2pt] ($(e\l a.north)+(0.1,0)$) -- ++(0,0.29) -| (c\l b.north);
+    \node[lab, anchor=west] at ($(e\l a.north)+(0.13,0.17)$) {\n};
+    \draw[->, rounded corners=2pt] ($(e\l b.north)+(0.1,0)$) -- ++(0,0.22) -| (c\l a.north);
+    \node[lab, anchor=west] at ($(e\l b.north)+(0.13,0.17)$) {\n};
   }
   % time embedding
-  \node[tensor] (t) at (0.12,-0.5) {$t$};
-  \node[free, minimum width=0.2in] (tau) at (0.6,-0.5) {$\tau$};
-  \node[lin] (tl1) at (1.18,-0.5) {$L_{64\to256}$};
-  \node[free, minimum width=0.17in] (ts) at (1.76,-0.5) {$\sigma$};
-  \node[lin] (tl2) at (2.42,-0.5) {$L_{256\to256}$};
-  \node[tensor] (te) at (3.05,-0.5) {$e\in\R^{256}$};
+  \node[tensor] (t) at (0.12,-0.44) {$t$};
+  \node[free, minimum width=0.2in] (tau) at (0.6,-0.44) {$\tau$};
+  \node[lin] (tl1) at (1.18,-0.44) {$L_{64\to256}$};
+  \node[free, minimum width=0.17in] (ts) at (1.76,-0.44) {$\sigma$};
+  \node[lin] (tl2) at (2.42,-0.44) {$L_{256\to256}$};
+  \node[tensor] (te) at (3.05,-0.44) {$e\in\R^{256}$};
   \draw[->] (t) -- (tau); \draw[->] (tau) -- (tl1); \draw[->] (tl1) -- (ts); \draw[->] (ts) -- (tl2); \draw[->] (tl2) -- (te);
-  % residual block R_{a -> b}
-  \node[lanelab, anchor=east] at (-0.06,-1.1) {$R_{a\to b}$};
-  \node[tensor] (rh) at (0.12,-1.1) {$h$};
-  \node[sub, minimum width=0.24in] (rn1) at (0.46,-1.1) {$N_a$};
-  \node[free, minimum width=0.17in] (rs1) at (0.76,-1.1) {$\sigma$};
-  \node[free, minimum width=0.2in] (rp1) at (1.04,-1.1) {$\unf$};
-  \node[lin] (rl1) at (1.46,-1.1) {$L_{9a\to b}$};
-  \node[sub, minimum width=0.24in] (rn2) at (1.88,-1.1) {$N_b$};
-  \node[free, minimum width=0.2in] (rf) at (2.18,-1.1) {$F$};
-  \node[free, minimum width=0.17in] (rs2) at (2.46,-1.1) {$\sigma$};
-  \node[free, minimum width=0.2in] (rp2) at (2.74,-1.1) {$\unf$};
-  \node[lin] (rl2) at (3.16,-1.1) {$L^{\circ}_{9b\to b}$};
-  \node[op] (rsum) at (3.56,-1.1) {$+$};
-  \node[tensor] (rho) at (3.84,-1.1) {$h'$};
+  % residual block R_{a -> b}, opened: its convolutions are C frames
+  \node[tensor] (rh) at (0.5,-1.26) {$h$};
+  \node[sub, minimum width=0.24in] (rn1) at (0.84,-1.26) {$N_a$};
+  \node[free, minimum width=0.17in] (rs1) at (1.14,-1.26) {$\sigma$};
+  \node[free, minimum width=0.2in] (rp1) at (1.46,-1.26) {$\unf$};
+  \node[lin] (rl1) at (1.88,-1.26) {$L_{9a\to b}$};
+  \node[frame, fit=(rp1)(rl1)] (rc1) {};
+  \node[tab] (rc1t) at ($(rc1.north west)+(0.02,-0.005)$) {$C_{a\to b}$};
+  \node[sub, minimum width=0.24in] (rn2) at (2.42,-1.26) {$N_b$};
+  \node[free, minimum width=0.2in] (rf) at (2.72,-1.26) {$F$};
+  \node[free, minimum width=0.17in] (rs2) at (3.0,-1.26) {$\sigma$};
+  \node[free, minimum width=0.2in] (rp2) at (3.32,-1.26) {$\unf$};
+  \node[lin] (rl2) at (3.74,-1.26) {$L_{9b\to b}$};
+  \node[frame, fit=(rp2)(rl2)] (rc2) {};
+  \node[tab] (rc2t) at ($(rc2.north west)+(0.02,-0.005)$) {$C_{b\to b}$};
+  \node[op] (rsum) at (4.14,-1.26) {$+$};
+  \node[tensor] (rho) at (4.4,-1.26) {$h'$};
   \draw[->] (rh) -- (rn1); \draw[->] (rn1) -- (rs1); \draw[->] (rs1) -- (rp1); \draw[->] (rp1) -- (rl1); \draw[->] (rl1) -- (rn2);
   \draw[->] (rn2) -- (rf); \draw[->] (rf) -- (rs2); \draw[->] (rs2) -- (rp2); \draw[->] (rp2) -- (rl2); \draw[->] (rl2) -- (rsum); \draw[->] (rsum) -- (rho);
-  \node[skipmap] (rskip) at (2.18,-0.8) {$L_{a\to b}$};
+  \node[skipmap] (rskip) at (2.72,-0.9) {$L_{a\to b}$};
   \draw[->, rounded corners=2pt] (rh.north) |- (rskip);
   \draw[->, rounded corners=2pt] (rskip) -| (rsum.north);
-  \node[tensor] (re) at (1.38,-1.46) {$e$};
-  \node[free, minimum width=0.17in] (res) at (1.72,-1.46) {$\sigma$};
-  \node[lin] (rel) at (2.18,-1.46) {$L_{256\to2b}$};
+  \node[tensor] (re) at (2.0,-1.62) {$e$};
+  \node[free, minimum width=0.17in] (res) at (2.32,-1.62) {$\sigma$};
+  \node[lin] (rel) at (2.72,-1.62) {$L_{256\to2b}$};
   \draw[->] (re) -- (res); \draw[->] (res) -- (rel); \draw[->] (rel) -- node[lab, right] {$[s;u]$} (rf);
-  % attention block A_a
-  \node[lanelab, anchor=east] at (4.14,-1.1) {$A_a$};
-  \node[tensor] (ax) at (4.3,-1.1) {$X$};
-  \node[sub, minimum width=0.24in] (an) at (4.64,-1.1) {$N_a$};
-  \node[lin] (aq) at (5.1,-1.1) {$L_{a\to3a}$};
-  \node[sub, minimum width=0.26in] (aphi) at (5.56,-1.1) {$\Phi_a$};
-  \node[lin] (ao) at (6.02,-1.1) {$L^{\circ}_{a\to a}$};
-  \node[op] (asum) at (6.42,-1.1) {$+$};
-  \node[tensor] (axo) at (6.7,-1.1) {$X'$};
+  \node[frame, fit=(rh)(rskip)(rho)(re)(rel)(rc1)(rc2)(rc1t)(rc2t)] (rfr) {};
+  \node[tab] at ($(rfr.north west)+(0.02,-0.005)$) {$R_{a\to b}$};
+  % attention block A_a, opened
+  \node[tensor] (ax) at (4.85,-1.26) {$X$};
+  \node[sub, minimum width=0.24in] (an) at (5.16,-1.26) {$N_a$};
+  \node[lin] (aq) at (5.6,-1.26) {$L_{a\to3a}$};
+  \node[sub, minimum width=0.26in] (aphi) at (6.04,-1.26) {$\Phi_a$};
+  \node[lin] (ao) at (6.48,-1.26) {$L_{a\to a}$};
+  \node[op] (asum) at (6.84,-1.26) {$+$};
+  \node[tensor] (axo) at (7.06,-1.26) {$X'$};
   \draw[->] (ax) -- (an); \draw[->] (an) -- (aq); \draw[->] (aq) -- (aphi); \draw[->] (aphi) -- (ao); \draw[->] (ao) -- (asum); \draw[->] (asum) -- (axo);
-  \draw[->, rounded corners=2pt] (ax.north) |- ($(aq.north)+(0,0.18)$) -| (asum.north);
-  % convolution, downsampling and upsampling composites
-  \node[lanelab, anchor=east] at (-0.06,-1.84) {$C_{a\to b}$};
-  \node[tensor] (ch) at (0.12,-1.84) {$h$};
-  \node[free, minimum width=0.2in] (cp) at (0.46,-1.84) {$\unf$};
-  \node[lin] (cl) at (0.9,-1.84) {$L_{9a\to b}$};
-  \node[tensor] (cho) at (1.3,-1.84) {$h'$};
+  \coordinate (askip) at (5.6,-0.9);
+  \draw[->, rounded corners=2pt] (ax.north) |- (askip) -| (asum.north);
+  \node[frame, fit=(ax)(axo)(an)(askip)] (afr) {};
+  \node[tab] at ($(afr.north west)+(0.02,-0.005)$) {$A_a$};
+  % convolution, downsampling and upsampling, opened
+  \node[tensor] (ch) at (0.5,-2.1) {$h$};
+  \node[free, minimum width=0.2in] (cp) at (0.84,-2.1) {$\unf$};
+  \node[lin] (cl) at (1.26,-2.1) {$L_{9a\to b}$};
+  \node[tensor] (cho) at (1.64,-2.1) {$h'$};
   \draw[->] (ch) -- (cp); \draw[->] (cp) -- (cl); \draw[->] (cl) -- (cho);
-  \node[lanelab, anchor=east] at (1.9,-1.84) {$D_a$};
-  \node[tensor] (dh) at (2.06,-1.84) {$h$};
-  \node[free, minimum width=0.2in] (dp) at (2.42,-1.84) {$\unf^{\downarrow}$};
-  \node[lin] (dl) at (2.9,-1.84) {$L_{9a\to a}$};
-  \node[tensor] (dho) at (3.3,-1.84) {$h'$};
+  \node[frame, fit=(ch)(cp)(cl)(cho)] (cfr) {};
+  \node[tab] at ($(cfr.north west)+(0.02,-0.005)$) {$C_{a\to b}$};
+  \node[tensor] (dh) at (2.1,-2.1) {$h$};
+  \node[free, minimum width=0.2in] (dp) at (2.46,-2.1) {$\unf^{\downarrow}$};
+  \node[lin] (dl) at (2.9,-2.1) {$L_{9a\to a}$};
+  \node[tensor] (dho) at (3.28,-2.1) {$h'$};
   \draw[->] (dh) -- (dp); \draw[->] (dp) -- (dl); \draw[->] (dl) -- (dho);
-  \node[lanelab, anchor=east] at (3.9,-1.84) {$U_a$};
-  \node[tensor] (uh) at (4.06,-1.84) {$h$};
-  \node[free, minimum width=0.2in] (uu) at (4.4,-1.84) {$\uparrow_2$};
-  \node[free, minimum width=0.2in] (up) at (4.74,-1.84) {$\unf$};
-  \node[lin] (ul) at (5.2,-1.84) {$L_{9a\to a}$};
-  \node[tensor] (uho) at (5.6,-1.84) {$h'$};
+  \node[frame, fit=(dh)(dp)(dl)(dho)] (dfr) {};
+  \node[tab] at ($(dfr.north west)+(0.02,-0.005)$) {$D_a$};
+  \node[tensor] (uh) at (3.75,-2.1) {$h$};
+  \node[free, minimum width=0.2in] (uu) at (4.08,-2.1) {$\uparrow_2$};
+  \node[free, minimum width=0.2in] (up) at (4.44,-2.1) {$\unf$};
+  \node[lin] (ul) at (4.86,-2.1) {$L_{9a\to a}$};
+  \node[frame, fit=(up)(ul)] (uc) {};
+  \node[tab] (uct) at ($(uc.north west)+(0.02,-0.005)$) {$C_{a\to a}$};
+  \node[tensor] (uho) at (5.3,-2.1) {$h'$};
   \draw[->] (uh) -- (uu); \draw[->] (uu) -- (up); \draw[->] (up) -- (ul); \draw[->] (ul) -- (uho);
+  \node[frame, fit=(uh)(uu)(uc)(uct)(uho)] (ufr) {};
+  \node[tab] at ($(ufr.north west)+(0.02,-0.005)$) {$U_a$};
   % legend
-  \node[anchor=north west, font=\scriptsize, text width=7.3in, align=left, inner sep=0pt] at (-0.3,-2.12)
+  \node[anchor=north west, font=\scriptsize, text width=7.3in, align=left, inner sep=0pt] at (-0.3,-2.36)
     {\swg\ object of a sparse-transformers class ($S_\kappa$, $\kappa\le n$)\quad
      \swo\ sparsifiable, not trivially mappable: none\quad
-     \swn\ parameter-free\quad
-     \sww\ composite\\
+     \swn\ parameter-free\\
      \swb\ substitutable (attention-free attention, dynamic tanh)\quad
-     \swd\ identity for $a=b$\quad
-     $\circ$ zero-initialised};
+     \swd\ identity for $a=b$};
 \end{tikzpicture}}
-\vspace{0pt}
-{\scriptsize
-\setlength{\tabcolsep}{1.5pt}
-\renewcommand{\arraystretch}{0.93}
-\begin{tabular}{@{}>{$}p{0.42in}<{$}>{\raggedright\arraybackslash}p{1.72in}>{\raggedright\arraybackslash}p{2.9in}>{\raggedleft\arraybackslash}p{1.08in}>{\raggedright\arraybackslash}p{1.05in}@{}}
+
+\vspace{4pt}
+{\scriptsize%
+\setlength{\tabcolsep}{2.5pt}%
+\renewcommand{\arraystretch}{0.93}%
+\begin{tabular}{@{}>{$}p{0.4in}<{$}>{\raggedright\arraybackslash}p{1.82in}>{\raggedright\arraybackslash}p{2.85in}>{\raggedleft\arraybackslash}p{0.98in}>{\raggedright\arraybackslash}p{1.08in}@{}}
 \toprule
  & domain $\to$ codomain & definition & parameters & sparse-transformers \\
 \midrule
 \sigma & $\R\to\R$, elementwise & $x\mapsto x/(1+e^{-x})$ & 0 & \swn \\
 \tau & $\R\to\R^{64}$ & $t\mapsto(\cos\omega_i t)_{i<32}\oplus(\sin\omega_i t)_{i<32}$, $\omega_i=10^{-i/8}$ & 0 & \swn \\
-L_{n\to m} & $\R^{n}\to\R^{m}$ per position & $v\mapsto Wv+b$, $W\in\R^{m\times n}$, $b\in\R^{m}$ & $nm+m$ & \swg\ \texttt{SparseLinear}, $\kappa=n$ \\
-L^{\circ} & as $L$ & $W=0$, $b=0$ at initialisation & & \swg \\
+L_{n\to m} & $\R^{n}\to\R^{m}$ per position & $x\mapsto Wx+w_0$, $W\in\R^{m\times n}$, $w_0\in\R^{m}$ & $nm+m$ & \swg\ \texttt{SparseLinear}, $\kappa=n$ \\
 \unf & $\R^{a\times h\times w}\to\R^{9a\times h\times w}$ & $(\unf h)_{(c,p,q),i,j}=h_{c,i+p,j+q}$, $p,q\in\{-1,0,1\}$, zero padding & 0 & \swn \\
-\unf^{\downarrow} & $\R^{a\times h\times w}\to\R^{9a\times h/2\times w/2}$ & $(\unf^{\downarrow}h)_{(c,p,q),i,j}=h_{c,2i+p,2j+q}$ & 0 & \swn \\
+\unf^{\downarrow} & $\R^{a\times h\times w}\to\R^{9a\times h/2\times w/2}$ & $(\unf^{\downarrow}h)_{(c,p,q),i,j}=h_{c,2i+p,2j+q}$, $p,q$ and padding as for $\unf$ & 0 & \swn \\
 \uparrow_2 & $\R^{a\times h\times w}\to\R^{a\times2h\times2w}$ & $(\uparrow_2h)_{c,i,j}=h_{c,\lfloor i/2\rfloor,\lfloor j/2\rfloor}$ & 0 & \swn \\
-N_a & $\R^{a\times h\times w}\to\R^{a\times h\times w}$ & $\gamma_c\,(h_{c,i,j}-\mu_g)/\sqrt{v_g+10^{-5}}+\beta_c$; $\mu_g,v_g$: mean, variance of group $g\ni c$ ($a/32$ channels, all positions) & $2a$ & \swb\ \texttt{DyT}, \texttt{RMSNorm} \\
+N_a & $\R^{a\times h\times w}\to\R^{a\times h\times w}$ & $\gamma_c\,(h_{c,i,j}-\mu_g)/\sqrt{v_g+10^{-5}}+\beta_c$; $\mu_g,v_g$: mean, variance of group $g\ni c$ ($a/32$ channels, all positions) & $2a$ & \swb\ \texttt{DyT} \\
 F & $\R^{b\times h\times w}\times\R^{2b}\to\R^{b\times h\times w}$ & $(z,[s;u])\mapsto z\odot(1+s)+u$, $s,u$ broadcast over positions & 0 & \swn \\
-\Phi_a & $\R^{3a\times h\times w}\to\R^{a\times h\times w}$ & 4 heads of $a/4$ channels over the $m=hw$ positions; $H_j=V_j\,\mathrm{softmax}(K_j^{\top}Q_j/\sqrt{a/4})$, softmax over keys; output $[H_1;\dots;H_4]$ & 0 & \swb\ \texttt{AFTConv}, \texttt{AFTRecurrence} (causal) \\
-\Vert & $\R^{a\times h\times w}\times\R^{c\times h\times w}\to\R^{(a+c)\times h\times w}$ & channel concatenation & 0 & \swn \\
+\Phi_a & $\R^{3a\times h\times w}\to\R^{a\times h\times w}$ & $[Q_1;K_1;V_1;\dots;Q_4;K_4;V_4]\mapsto[H_1;\dots;H_4]$, $Q_j,K_j,V_j,H_j\in\R^{a/4\times hw}$; $H_j=V_j\,\mathrm{softmax}(K_j^{\top}Q_j/\sqrt{a/4})$, softmax over keys & 0 & \swb\ \texttt{AFTConv}, \texttt{AFTRecurrence} (causal), for $L_{a\to a}\,\Phi_a\,L_{a\to3a}$ \\
+\Vert & $\R^{a\times h\times w}\times\R^{a'\times h\times w}\to\R^{(a+a')\times h\times w}$ & $(h,h_{\mathrm{skip}})\mapsto[h;h_{\mathrm{skip}}]$, $h$ from the lane, $h_{\mathrm{skip}}$ from the arc & 0 & \swn \\
 \midrule
-C_{a\to b} & $\R^{a\times h\times w}\to\R^{b\times h\times w}$ & $L_{9a\to b}\circ\unf$ & $9ab+b$ & \sww \\
-D_a & $\R^{a\times h\times w}\to\R^{a\times h/2\times w/2}$ & $L_{9a\to a}\circ\unf^{\downarrow}$ & $9a^2+a$ & \sww \\
-U_a & $\R^{a\times h\times w}\to\R^{a\times2h\times2w}$ & $C_{a\to a}\circ\uparrow_2$ & $9a^2+a$ & \sww \\
-R_{a\to b} & $\R^{a\times h\times w}\times\R^{256}\to\R^{b\times h\times w}$ & $(h,e)\mapsto S(h)+C^{\circ}_{b\to b}\,\sigma\,F\big(N_b\,C_{a\to b}\,\sigma\,N_a h,\;L_{256\to2b}\,\sigma(e)\big)$; $S=L_{a\to b}$ if $a\neq b$, else $S=\mathrm{id}$ & $2a+9ab+9b^2+518b$\newline$+[a\neq b](ab+b)$ & \sww \\
-A_a & $\R^{a\times h\times w}\to\R^{a\times h\times w}$ & $X\mapsto X+L^{\circ}_{a\to a}\,\Phi_a\,L_{a\to3a}\,N_a X$ & $4a^2+6a$ & \sww \\
+C_{a\to b} & $\R^{a\times h\times w}\to\R^{b\times h\times w}$ & $L_{9a\to b}\circ\unf$ & $9ab+b$ & \\
+D_a & $\R^{a\times h\times w}\to\R^{a\times h/2\times w/2}$ & $L_{9a\to a}\circ\unf^{\downarrow}$ & $9a^2+a$ & \\
+U_a & $\R^{a\times h\times w}\to\R^{a\times2h\times2w}$ & $C_{a\to a}\circ\uparrow_2$ & $9a^2+a$ & \\
+R_{a\to b} & $\R^{a\times h\times w}\times\R^{256}\to\R^{b\times h\times w}$ & $(h,e)\mapsto S(h)+C_{b\to b}\,\sigma\,F\big(N_b\,C_{a\to b}\,\sigma\,N_a h,\;L_{256\to2b}\,\sigma(e)\big)$\newline $S=L_{a\to b}$ if $a\neq b$, else $S=\mathrm{id}$ & $2a+9ab+9b^2+518b$\newline$+[a\neq b](ab+b)$ & \\
+A_a & $\R^{a\times h\times w}\to\R^{a\times h\times w}$ & $X\mapsto X+L_{a\to a}\,\Phi_a\,L_{a\to3a}\,N_a X$ & $4a^2+6a$ & \\
 \bottomrule
 \end{tabular}
+\setlength{\tabcolsep}{1.5pt}%
 
 \vspace{3pt}
 \begin{tabular}[t]{@{}>{\raggedright\arraybackslash}p{0.72in}>{\raggedright\arraybackslash}p{2.25in}>{\raggedleft\arraybackslash}p{0.6in}@{}}
@@ -242,7 +257,7 @@ $16^2\to32^2$ & $U_{192}$ & 331\,968 \\
 decoder $32^2$ & $R_{320\to128}$, $R_{256\to128}$, $R_{192\to128}$ & 1\,626\,240 \\
 $32^2\to64^2$ & $U_{128}$ & 147\,584 \\
 decoder $64^2$ & $R_{192\to64}$, $R_{128\to64}$, $R_{128\to64}$ & 497\,856 \\
-head $64^2$ & $C^{\circ}_{64\to3}\,\sigma\,N_{64}$ & 1\,859 \\
+head $64^2$ & $C_{64\to3}\,\sigma\,N_{64}$ & 1\,859 \\
 \midrule
 total & & 20\,972\,867 \\
 \bottomrule
@@ -252,9 +267,8 @@ total & & 20\,972\,867 \\
 {\scshape Fan-in.}
 \vspace{-9pt}
 \begin{gather*}
-S_\kappa:\R^{n}\to\R^{m},\;\; S_\kappa(x)=(M\odot W)x+b,\;\; M\in\{0,1\}^{m\times n},\;\; \textstyle\sum_{j}M_{ij}=\kappa\;\;\forall i\ \text{(rows uniform)},\;\; 1\le\kappa\le n,\;\; S_n=L_{n\to m},\;\; \kappa=n\ \text{in }s_\theta;\\[-2pt]
-G=(V,E),\;\; (j\to i)\in E\iff M_{ij}=1;\;\;
-k^{-}_i=\textstyle\sum_j M_{ij}=\kappa,\;\; k^{+}_j=\textstyle\sum_i M_{ij},\;\; \mathbb{E}\,k^{+}_j=\tfrac{m\kappa}{n},\;\; k_v=k^{-}_v+k^{+}_v;\;\;
-K_G:=\max_{v}k_v\ge\max_{v}k^{-}_v=\max_{l}\kappa_l .
+S_\kappa:\R^{n}\to\R^{m},\;\; S_\kappa(x)=(M\odot W)x+w_0,\;\; M\in\{0,1\}^{m\times n},\;\; \{j:M_{ij}=1\}\sim\mathrm{Unif}\tbinom{[n]}{\kappa}\;\;\forall i,\;\; 1\le\kappa\le n,\;\; S_n=L_{n\to m};\\[-2pt]
+G_\kappa=(V,E):\;\; (j\to i)\in E\iff M_{ij}=1,\;\; k^{-}_i=\textstyle\sum_j M_{ij}=\kappa,\;\; k^{+}_j=\textstyle\sum_i M_{ij},\;\; \mathbb{E}\,k^{+}_j=\tfrac{m\kappa}{n},\;\; k_v=k^{-}_v+k^{+}_v;\\[-2pt]
+G=\textstyle\bigcup_l G_{\kappa_l}\ \text{over the affine maps }L_l=S_{\kappa_l}\text{ of }s_\theta\ (\kappa_l=n_l),\ k^{\pm}_v\text{ summed over the maps at }v:\;\; K_G:=\max_{v}k_v\ge\max_{v}k^{-}_v=\max_{l}\kappa_l .
 \end{gather*}}
 \end{document}
