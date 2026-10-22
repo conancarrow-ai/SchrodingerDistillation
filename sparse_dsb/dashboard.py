@@ -515,7 +515,11 @@ SCRIPT = """(function () {
     if (name.indexOf('run-') === 0) {
       // a run link: open and show that section once, then drop the hash so later reloads keep the scroll position instead
       show('runs'); var target = document.getElementById(name);
-      if (target) { target.open = true; target.scrollIntoView(); }
+      if (target) {
+        target.open = true; target.scrollIntoView();
+        state[name] = true;
+        try { localStorage.setItem(openKey, JSON.stringify(state)); } catch (e) {}
+      }
       try { history.replaceState(null, '', '#runs'); } catch (e) {}
       return true;
     }
