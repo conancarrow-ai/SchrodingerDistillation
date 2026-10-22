@@ -97,12 +97,14 @@ class ToyModelConfig:
     x_dim: int = 2
     sparse_linear: str = "dense"       # dense (the reference), mask (st) or gather (z1t)
     linear_fan_in: int | None = None   # kappa of the sparse layers; None is the input width
+    swap_init: bool = False            # give each sparse layer the initial scale of the other implementation
 
     @property
     def label(self) -> str:
         if self.sparse_linear == "dense":
             return "dense"
-        return f"{self.sparse_linear} K={self.linear_fan_in if self.linear_fan_in is not None else 'full'}"
+        label = f"{self.sparse_linear} K={self.linear_fan_in if self.linear_fan_in is not None else 'full'}"
+        return label + (" (swapped init)" if self.swap_init else "")
 
 
 def fairseq_embedding(t, dim: int):
@@ -117,15 +119,34 @@ def fairseq_embedding(t, dim: int):
     return embedding
 
 
-def make_toy_linear(sparse_linear: str, fan_in: int | None):
+def make_toy_linear(sparse_linear: str, fan_in: int | None, swap_init: bool = False):
     """A constructor (ins, outs, key) -> layer. The mask and gather kinds always build the sparse-transformers
-    class, with the fan-in clamped to [1, ins]; a full fan-in gives a mask of ones."""
+    class, with the fan-in clamped to [1, ins]; a full fan-in gives a mask of ones.
+
+    The two classes initialise differently: the masked layer keeps the dense U(-1/sqrt(ins), 1/sqrt(ins))
+    weights and bias of eqx.nn.Linear under its mask, the gather layer draws its K weights per output from
+    U(-1/sqrt(K), 1/sqrt(K)) with a zero bias. With swap_init each gets the other's initial scale."""
     if sparse_linear == "dense":
         return lambda ins, outs, key: eqx.nn.Linear(ins, outs, key=key)
     if sparse_linear == "mask":
-        return lambda ins, outs, key: MaskedSparseLinear(ins, outs, sparse_count(fan_in, ins), key=key)
+        def make_mask(ins, outs, key):
+            k = sparse_count(fan_in, ins)
+            layer = MaskedSparseLinear(ins, outs, k, key=key)
+            if swap_init:
+                layer = eqx.tree_at(lambda l: l.linear.weight, layer, layer.linear.weight * math.sqrt(ins / k))
+                layer = eqx.tree_at(lambda l: l.linear.bias, layer, jnp.zeros_like(layer.linear.bias))
+            return layer
+        return make_mask
     if sparse_linear == "gather":
-        return lambda ins, outs, key: GatherSparseLinear(ins, outs, k=sparse_count(fan_in, ins), key=key)
+        def make_gather(ins, outs, key):
+            k = sparse_count(fan_in, ins)
+            layer = GatherSparseLinear(ins, outs, k=k, key=key)
+            if swap_init:
+                bound = 1.0 / math.sqrt(ins)
+                layer = eqx.tree_at(lambda l: l.weight, layer, layer.weight * math.sqrt(k / ins))
+                layer = eqx.tree_at(lambda l: l.bias, layer, jax.random.uniform(jax.random.fold_in(key, 1), (outs,), minval=-bound, maxval=bound))
+            return layer
+        return make_gather
     raise ValueError(f"unknown sparse_linear {sparse_linear!r} (expected one of {LINEAR_KINDS})")
 
 
@@ -151,7 +172,7 @@ class ScoreNetwork(eqx.Module):
 
     def __init__(self, config: ToyModelConfig, key):
         key_net, key_time, key_x = jax.random.split(key, 3)
-        make_linear = make_toy_linear(config.sparse_linear, config.linear_fan_in)
+        make_linear = make_toy_linear(config.sparse_linear, config.linear_fan_in, config.swap_init)
         t_enc_dim = 2 * config.pos_dim
         self.pos_dim = config.pos_dim
         self.net = MLP(2 * t_enc_dim, list(config.decoder_layers) + [config.x_dim], make_linear, key_net)
