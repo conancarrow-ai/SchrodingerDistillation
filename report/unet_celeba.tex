@@ -1,5 +1,5 @@
 \documentclass[10pt]{article}
-\usepackage[letterpaper,left=0.5in,right=0.5in,top=0.36in,bottom=0.3in]{geometry}
+\usepackage[letterpaper,left=0.5in,right=0.5in,top=0.3in,bottom=0.25in]{geometry}
 \usepackage{lmodern}
 \usepackage[T1]{fontenc}
 \usepackage{amsmath,amssymb}
@@ -7,14 +7,8 @@
 \usepackage{xcolor}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,calc}
-\usepackage[labelsep=period,font=footnotesize,labelfont=sc,justification=justified]{caption}
-\usepackage{float}
 \pagestyle{empty}
 \setlength{\parindent}{0pt}
-\setlength{\abovecaptionskip}{2pt}
-\setlength{\belowcaptionskip}{0pt}
-\setlength{\textfloatsep}{4pt}
-\setlength{\intextsep}{4pt}
 
 \definecolor{lane}{RGB}{178,178,178}
 \definecolor{gfill}{RGB}{219,240,222}\definecolor{gframe}{RGB}{62,138,86}
@@ -28,205 +22,239 @@
 \newcommand{\swo}{\sw{ofill}{oframe}}
 \newcommand{\swb}{\sw{bfill}{bframe}}
 \newcommand{\swn}{\sw{nfill}{nframe}}
-\newcommand{\cat}{[\,\cdot\,;\cdot\,]}
+\newcommand{\sww}{\sw{white}{black}}
+\newcommand{\swd}{\tikz[baseline=-0.5ex]\draw[dashed,gframe,fill=gfill,line width=0.4pt] (0,-0.45ex) rectangle (1.3ex,0.85ex);}
+\newcommand{\unf}{\mathcal{P}}
 
 \begin{document}
 \footnotesize
-{\large\scshape Model card}\quad the U-Net of the reference code for CelebA at $64\times64$:
-$\varphi_\theta:\R^{3\times64\times64}\times\R\to\R^{3\times64\times64}$, $20\,972\,867$ parameters.
+{\large\scshape U-Net, CelebA $64\times64$}\quad
+$s_\theta:\R^{3\times64\times64}\times\R\to\R^{3\times64\times64}$,\quad $(x,t)\mapsto y$,\quad $20\,972\,867$ parameters.
 
-\begin{figure}[H]
-\centering
+\vspace{1pt}
 \makebox[\textwidth][c]{\begin{tikzpicture}[x=1in,y=1in,
   >={Stealth[length=3pt,width=2.4pt]},
   every path/.style={line width=0.5pt},
-  box/.style={draw, line width=0.5pt, rounded corners=1.5pt, minimum height=0.27in, minimum width=0.5in, inner xsep=4pt, inner ysep=2pt, font=\footnotesize},
-  conv/.style={box, draw=oframe, fill=ofill},
+  box/.style={draw, line width=0.5pt, rounded corners=1.5pt, minimum height=0.24in, minimum width=0.28in, inner xsep=2.5pt, inner ysep=1.5pt, font=\scriptsize},
+  comp/.style={box, draw=black, fill=white},
   lin/.style={box, draw=gframe, fill=gfill},
-  attn/.style={box, draw=bframe, fill=bfill},
-  norm/.style={box, draw=bframe, fill=bfill},
+  sub/.style={box, draw=bframe, fill=bfill},
   free/.style={box, draw=nframe, fill=nfill},
-  op/.style={circle, draw=black!60, line width=0.5pt, fill=white, inner sep=0pt, minimum size=9pt, font=\scriptsize},
-  lab/.style={font=\scriptsize, text=black!65, inner sep=1.5pt},
-  tensor/.style={font=\footnotesize, inner sep=1pt}]
-  % lanes
-  \foreach \y/\t in {1.92/$64^2$, 1.28/$32^2$, 0.64/$16^2$, 0/$8^2$} {
-    \draw[lane, dotted, line width=0.4pt] (0.0,\y) -- (7.2,\y);
-    \node[lab, anchor=east] at (0.0,\y) {\t};
+  skipmap/.style={box, draw=gframe, fill=gfill, dashed},
+  op/.style={circle, draw=black!70, line width=0.5pt, fill=white, inner sep=0pt, minimum size=8pt, font=\scriptsize},
+  cat/.style={op, minimum size=7.5pt, font=\tiny},
+  lab/.style={font=\tiny, text=black!70, inner sep=1pt},
+  lanelab/.style={font=\scriptsize, inner sep=1pt},
+  tensor/.style={font=\scriptsize, inner sep=1pt}]
+  % lanes: spatial size of the feature map
+  \foreach \y/\t in {2.1/$64^2$, 1.4/$32^2$, 0.7/$16^2$, 0/$8^2$} {
+    \draw[lane, dotted, line width=0.4pt] (-0.02,\y) -- (7.0,\y);
+    \node[lanelab, anchor=east] at (-0.06,\y) {\t};
   }
-  % encoder column (x = 1.9) and decoder column (x = 5.3)
-  \node[tensor] (x) at (0.38,1.92) {$x$};
-  \node[conv] (c0) at (1.0,1.92) {$C_{3\to64}$};
-  \node[conv] (e64) at (1.9,1.92) {$R_{64\to64}\,{\times}2$};
-  \node[conv] (d64) at (1.9,1.6) {$D_{64}$};
-  \node[conv] (e32) at (1.9,1.28) {$R_{64\to128},\,R_{128\to128}$};
-  \node[conv] (d128) at (1.9,0.96) {$D_{128}$};
-  \node[conv] (e16) at (1.9,0.64) {$R_{128\to192},\,R_{192\to192}$};
-  \node[conv] (d192) at (1.9,0.32) {$D_{192}$};
-  \node[conv] (e8) at (1.9,0) {$R_{192\to256},\,R_{256\to256}$};
-  \node[conv] (m1) at (3.05,0) {$R_{256\to256}$};
-  \node[attn] (m2) at (3.72,0) {$A_{256}$};
-  \node[conv] (m3) at (4.39,0) {$R_{256\to256}$};
-  \node[conv] (g8) at (5.3,0) {$(\cat\,R_{\cdot\to256})\,{\times}3$};
-  \node[conv] (u256) at (5.3,0.32) {$U_{256}$};
-  \node[conv] (g16) at (5.3,0.64) {$(\cat\,R_{\cdot\to192})\,{\times}3$};
-  \node[conv] (u192) at (5.3,0.96) {$U_{192}$};
-  \node[conv] (g32) at (5.3,1.28) {$(\cat\,R_{\cdot\to128})\,{\times}3$};
-  \node[conv] (u128) at (5.3,1.6) {$U_{128}$};
-  \node[conv] (g64) at (5.3,1.92) {$(\cat\,R_{\cdot\to64})\,{\times}3$};
-  \node[conv] (head) at (6.45,1.92) {$C'_{64\to3}\,\sigma\,N_{64}$};
-  \node[tensor] (y) at (7.05,1.92) {$y$};
-  % encoder edges
-  \draw[->] (x) -- node[lab, above] {$3$} (c0);
-  \draw[->] (c0) -- node[lab, above] {$64$} (e64);
-  \draw[->] (e64) -- (d64);
-  \draw[->] (d64) -- (e32);
-  \draw[->] (e32) -- (d128);
-  \draw[->] (d128) -- (e16);
-  \draw[->] (e16) -- (d192);
-  \draw[->] (d192) -- (e8);
-  \draw[->] (e8) -- node[lab, above] {$256$} (m1);
-  \draw[->] (m1) -- (m2);
-  \draw[->] (m2) -- (m3);
-  \draw[->] (m3) -- node[lab, below, pos=0.4] {$256$} (g8);
-  % decoder edges
-  \draw[->] (g8) -- (u256);
-  \draw[->] (u256) -- (g16);
-  \draw[->] (g16) -- (u192);
-  \draw[->] (u192) -- (g32);
-  \draw[->] (g32) -- (u128);
-  \draw[->] (u128) -- (g64);
-  \draw[->] (g64) -- node[lab, above] {$64$} (head);
-  \draw[->] (head) -- node[lab, above] {$3$} (y);
-  % skips: the three encoder outputs of a lane feed the three decoder blocks of that lane
-  \draw[->] (e64) -- node[lab, above] {skips $64,\,64,\,64$} (g64);
-  \draw[->] (e32) -- node[lab, above] {skips $128,\,128,\,64$} (g32);
-  \draw[->] (e16) -- node[lab, above] {skips $192,\,192,\,128$} (g16);
-  \draw[->] (e8.north) ++(0.3,0) |- ($(m2.north)+(0,0.19)$) -| node[lab, above, pos=0.25] {skips $256,\,256,\,192$} ($(g8.north)+(-0.38,0)$);
-  % time conditioning bus
-  \node[lab, anchor=east, text=black] at (0.0,-0.4) {time};
-  \node[tensor] (t) at (0.38,-0.4) {$t$};
-  \node[free, minimum width=0.3in] (tau) at (0.95,-0.4) {$\tau$};
-  \node[lin] (l1) at (1.75,-0.4) {$L_{64\to256}$};
-  \node[free, minimum width=0.3in] (sg) at (2.5,-0.4) {$\sigma$};
-  \node[lin] (l2) at (3.25,-0.4) {$L_{256\to256}$};
-  \node[tensor] (e) at (4.05,-0.4) {$e\in\R^{256}$};
-  \draw[->] (t) -- (tau); \draw[->] (tau) -- node[lab, above] {$64$} (l1); \draw[->] (l1) -- node[lab, above] {$256$} (sg);
-  \draw[->] (sg) -- (l2); \draw[->] (l2) -- (e);
-  \node[lab, anchor=west] at (4.55,-0.4) {$e$ enters every residual block $R$ (scale and shift, below).};
-  % residual block
-  \begin{scope}[shift={(0.38,-1.0)}]
-    \node[lab, anchor=east, text=black] at (-0.38,0) {$R_{a\to b}$:};
-    \node[tensor] (h) at (0,0) {$h$};
-    \node[norm, minimum width=0.3in] (n1) at (0.5,0) {$N_a$};
-    \node[free, minimum width=0.25in] (s1) at (1.0,0) {$\sigma$};
-    \node[conv] (c1) at (1.65,0) {$C_{a\to b}$};
-    \node[norm, minimum width=0.95in] (n2) at (2.75,0) {$N_b(\cdot)\odot(1{+}s(e))+u(e)$};
-    \node[free, minimum width=0.25in] (s2) at (3.65,0) {$\sigma$};
-    \node[conv] (c2) at (4.3,0) {$C'_{b\to b}$};
-    \node[op] (sum) at (4.95,0) {$+$};
-    \node[tensor] (hout) at (5.35,0) {$h'$};
-    \node[lin] (ls) at (2.75,-0.42) {$L_{256\to2b}$};
-    \node[tensor] (ein) at (1.95,-0.42) {$\sigma(e)$};
-    \draw[->] (h) -- (n1); \draw[->] (n1) -- (s1); \draw[->] (s1) -- (c1); \draw[->] (c1) -- node[lab, above] {$b$} (n2);
-    \draw[->] (n2) -- (s2); \draw[->] (s2) -- (c2); \draw[->] (c2) -- (sum); \draw[->] (sum) -- (hout);
-    \draw[->] (ein) -- (ls); \draw[->] (ls) -- node[lab, right] {$[s;u]\in\R^{2b}$} (n2);
-    \draw[->] (h.north) |- ($(c2.north)+(0,0.2)$) -| (sum.north);
-    \node[lab] at (3.3,0.29) {$S$: identity if $a=b$, else $C^1_{a\to b}$};
-  \end{scope}
-  % attention block
-  \begin{scope}[shift={(0.38,-1.86)}]
-    \node[lab, anchor=east, text=black] at (-0.38,0) {$A_{a}$:};
-    \node[tensor] (X) at (0,0) {$X$};
-    \node[norm, minimum width=0.3in] (an) at (0.5,0) {$N_a$};
-    \node[lin] (qkv) at (1.15,0) {$W_{qkv}$};
-    \node[attn, minimum width=1.55in] (sm) at (2.8,0) {$H_j=V_j\,\mathrm{softmax}\!\big(K_j^{\!\top}Q_j/\sqrt{a/4}\big)$, $j=1..4$};
-    \node[lin] (wo) at (4.3,0) {$W_{o}$};
-    \node[op] (asum) at (4.95,0) {$+$};
-    \node[tensor] (Xout) at (5.35,0) {$X'$};
-    \draw[->] (X) -- (an); \draw[->] (an) -- (qkv); \draw[->] (qkv) -- node[lab, above] {$3a$} (sm); \draw[->] (sm) -- node[lab, above] {$a$} (wo);
-    \draw[->] (wo) -- (asum); \draw[->] (asum) -- (Xout);
-    \draw[->] (X.north) |- ($(wo.north)+(0,0.2)$) -| (asum.north);
-    \node[lab, anchor=north west, text=black, text width=7.0in, align=left] at (-0.38,-0.22) {\swg\ per-pixel affine map: a sparse linear layer with fan-in $K$ (dense when $K=n_{\mathrm{in}}$)\quad \swo\ $3{\times}3$ convolution: parameter-free unfold, then a per-pixel sparse linear map $\R^{9a}\to\R^{b}$ with shared, structured support\quad \swb\ substitutable: softmax attention (by attention-free or windowed causal attention), group norm (by dynamic tanh or RMS norm)\quad \swn\ parameter-free};
-  \end{scope}
+  % lane 64^2
+  \node[tensor] (x) at (0.12,2.1) {$x$};
+  \node[comp] (s0) at (0.6,2.1) {$C_{3\to64}$};
+  \node[comp] (e1a) at (1.18,2.1) {$R_{64\to64}$};
+  \node[comp] (e1b) at (1.76,2.1) {$R_{64\to64}$};
+  \node[comp] (g1a) at (4.26,2.1) {$R_{192\to64}$};
+  \node[comp] (g1b) at (4.84,2.1) {$R_{128\to64}$};
+  \node[comp] (g1c) at (5.42,2.1) {$R_{128\to64}$};
+  \node[sub, minimum width=0.24in] (hn) at (5.9,2.1) {$N_{64}$};
+  \node[free, minimum width=0.17in] (hs) at (6.18,2.1) {$\sigma$};
+  \node[comp] (hc) at (6.56,2.1) {$C^{\circ}_{64\to3}$};
+  \node[tensor] (y) at (6.96,2.1) {$y$};
+  % lane 32^2
+  \node[comp] (d2) at (0.6,1.4) {$D_{64}$};
+  \node[comp] (e2a) at (1.18,1.4) {$R_{64\to128}$};
+  \node[comp] (e2b) at (1.76,1.4) {$R_{128\to128}$};
+  \node[comp] (g2a) at (4.26,1.4) {$R_{320\to128}$};
+  \node[comp] (g2b) at (4.84,1.4) {$R_{256\to128}$};
+  \node[comp] (g2c) at (5.42,1.4) {$R_{192\to128}$};
+  \node[comp] (u2) at (6.0,1.4) {$U_{128}$};
+  % lane 16^2
+  \node[comp] (d3) at (0.6,0.7) {$D_{128}$};
+  \node[comp] (e3a) at (1.18,0.7) {$R_{128\to192}$};
+  \node[comp] (e3b) at (1.76,0.7) {$R_{192\to192}$};
+  \node[comp] (g3a) at (4.26,0.7) {$R_{448\to192}$};
+  \node[comp] (g3b) at (4.84,0.7) {$R_{384\to192}$};
+  \node[comp] (g3c) at (5.42,0.7) {$R_{320\to192}$};
+  \node[comp] (u3) at (6.0,0.7) {$U_{192}$};
+  % lane 8^2
+  \node[comp] (d4) at (0.6,0) {$D_{192}$};
+  \node[comp] (e4a) at (1.18,0) {$R_{192\to256}$};
+  \node[comp] (e4b) at (1.76,0) {$R_{256\to256}$};
+  \node[comp] (m1) at (2.42,0) {$R_{256\to256}$};
+  \node[comp] (m2) at (3.0,0) {$A_{256}$};
+  \node[comp] (m3) at (3.58,0) {$R_{256\to256}$};
+  \node[comp] (g4a) at (4.26,0) {$R_{512\to256}$};
+  \node[comp] (g4b) at (4.84,0) {$R_{512\to256}$};
+  \node[comp] (g4c) at (5.42,0) {$R_{448\to256}$};
+  \node[comp] (u4) at (6.0,0) {$U_{256}$};
+  % lane edges
+  \draw[->] (x) -- (s0); \draw[->] (s0) -- (e1a); \draw[->] (e1a) -- (e1b);
+  \draw[->] (g1a) -- (g1b); \draw[->] (g1b) -- (g1c); \draw[->] (g1c) -- (hn); \draw[->] (hn) -- (hs); \draw[->] (hs) -- (hc); \draw[->] (hc) -- (y);
+  \foreach \l in {2,3,4} { \draw[->] (d\l) -- (e\l a); \draw[->] (e\l a) -- (e\l b); \draw[->] (g\l a) -- (g\l b); \draw[->] (g\l b) -- (g\l c); \draw[->] (g\l c) -- (u\l); }
+  \draw[->] (e4b) -- (m1); \draw[->] (m1) -- (m2); \draw[->] (m2) -- (m3); \draw[->] (m3) -- (g4a);
+  % resolution changes
+  \draw[->, rounded corners=2pt] (e1b.south) -- ++(0,-0.08) -| (d2.north);
+  \draw[->, rounded corners=2pt] (e2b.south) -- ++(0,-0.08) -| (d3.north);
+  \draw[->, rounded corners=2pt] (e3b.south) -- ++(0,-0.08) -| (d4.north);
+  \draw[->, rounded corners=2pt] (u4.north) -- ++(0,0.38) -| (g3a.south);
+  \draw[->, rounded corners=2pt] (u3.north) -- ++(0,0.38) -| (g2a.south);
+  \draw[->, rounded corners=2pt] (u2.north) -- ++(0,0.38) -| (g1a.south);
+  % skips: concatenation nodes on the decoder blocks, nested arcs from the encoder outputs
+  \foreach \l in {1,2,3,4} { \foreach \b in {a,b,c} { \node[cat, anchor=south] (c\l\b) at (g\l\b.north) {$\Vert$}; } }
+  \foreach \l/\src/\n in {1/s0/64, 2/d2/64, 3/d3/128, 4/d4/192} {
+    \draw[->, rounded corners=2pt] ($(\src.north)+(0.1,0)$) -- ++(0,0.42) -| (c\l c.north);
+    \node[lab, anchor=west] at ($(\src.north)+(0.13,0.22)$) {\n};
+  }
+  \foreach \l/\n in {1/64, 2/128, 3/192, 4/256} {
+    \draw[->, rounded corners=2pt] ($(e\l a.north)+(0.1,0)$) -- ++(0,0.35) -| (c\l b.north);
+    \node[lab, anchor=west] at ($(e\l a.north)+(0.13,0.22)$) {\n};
+    \draw[->, rounded corners=2pt] ($(e\l b.north)+(0.1,0)$) -- ++(0,0.28) -| (c\l a.north);
+    \node[lab, anchor=west] at ($(e\l b.north)+(0.13,0.22)$) {\n};
+  }
+  % time embedding
+  \node[tensor] (t) at (0.12,-0.5) {$t$};
+  \node[free, minimum width=0.2in] (tau) at (0.6,-0.5) {$\tau$};
+  \node[lin] (tl1) at (1.18,-0.5) {$L_{64\to256}$};
+  \node[free, minimum width=0.17in] (ts) at (1.76,-0.5) {$\sigma$};
+  \node[lin] (tl2) at (2.42,-0.5) {$L_{256\to256}$};
+  \node[tensor] (te) at (3.05,-0.5) {$e\in\R^{256}$};
+  \draw[->] (t) -- (tau); \draw[->] (tau) -- (tl1); \draw[->] (tl1) -- (ts); \draw[->] (ts) -- (tl2); \draw[->] (tl2) -- (te);
+  % residual block R_{a -> b}
+  \node[lanelab, anchor=east] at (-0.06,-1.1) {$R_{a\to b}$};
+  \node[tensor] (rh) at (0.12,-1.1) {$h$};
+  \node[sub, minimum width=0.24in] (rn1) at (0.46,-1.1) {$N_a$};
+  \node[free, minimum width=0.17in] (rs1) at (0.76,-1.1) {$\sigma$};
+  \node[free, minimum width=0.2in] (rp1) at (1.04,-1.1) {$\unf$};
+  \node[lin] (rl1) at (1.46,-1.1) {$L_{9a\to b}$};
+  \node[sub, minimum width=0.24in] (rn2) at (1.88,-1.1) {$N_b$};
+  \node[free, minimum width=0.2in] (rf) at (2.18,-1.1) {$F$};
+  \node[free, minimum width=0.17in] (rs2) at (2.46,-1.1) {$\sigma$};
+  \node[free, minimum width=0.2in] (rp2) at (2.74,-1.1) {$\unf$};
+  \node[lin] (rl2) at (3.16,-1.1) {$L^{\circ}_{9b\to b}$};
+  \node[op] (rsum) at (3.56,-1.1) {$+$};
+  \node[tensor] (rho) at (3.84,-1.1) {$h'$};
+  \draw[->] (rh) -- (rn1); \draw[->] (rn1) -- (rs1); \draw[->] (rs1) -- (rp1); \draw[->] (rp1) -- (rl1); \draw[->] (rl1) -- (rn2);
+  \draw[->] (rn2) -- (rf); \draw[->] (rf) -- (rs2); \draw[->] (rs2) -- (rp2); \draw[->] (rp2) -- (rl2); \draw[->] (rl2) -- (rsum); \draw[->] (rsum) -- (rho);
+  \node[skipmap] (rskip) at (2.18,-0.8) {$L_{a\to b}$};
+  \draw[->, rounded corners=2pt] (rh.north) |- (rskip);
+  \draw[->, rounded corners=2pt] (rskip) -| (rsum.north);
+  \node[tensor] (re) at (1.38,-1.46) {$e$};
+  \node[free, minimum width=0.17in] (res) at (1.72,-1.46) {$\sigma$};
+  \node[lin] (rel) at (2.18,-1.46) {$L_{256\to2b}$};
+  \draw[->] (re) -- (res); \draw[->] (res) -- (rel); \draw[->] (rel) -- node[lab, right] {$[s;u]$} (rf);
+  % attention block A_a
+  \node[lanelab, anchor=east] at (4.14,-1.1) {$A_a$};
+  \node[tensor] (ax) at (4.3,-1.1) {$X$};
+  \node[sub, minimum width=0.24in] (an) at (4.64,-1.1) {$N_a$};
+  \node[lin] (aq) at (5.1,-1.1) {$L_{a\to3a}$};
+  \node[sub, minimum width=0.26in] (aphi) at (5.56,-1.1) {$\Phi_a$};
+  \node[lin] (ao) at (6.02,-1.1) {$L^{\circ}_{a\to a}$};
+  \node[op] (asum) at (6.42,-1.1) {$+$};
+  \node[tensor] (axo) at (6.7,-1.1) {$X'$};
+  \draw[->] (ax) -- (an); \draw[->] (an) -- (aq); \draw[->] (aq) -- (aphi); \draw[->] (aphi) -- (ao); \draw[->] (ao) -- (asum); \draw[->] (asum) -- (axo);
+  \draw[->, rounded corners=2pt] (ax.north) |- ($(aq.north)+(0,0.18)$) -| (asum.north);
+  % convolution, downsampling and upsampling composites
+  \node[lanelab, anchor=east] at (-0.06,-1.84) {$C_{a\to b}$};
+  \node[tensor] (ch) at (0.12,-1.84) {$h$};
+  \node[free, minimum width=0.2in] (cp) at (0.46,-1.84) {$\unf$};
+  \node[lin] (cl) at (0.9,-1.84) {$L_{9a\to b}$};
+  \node[tensor] (cho) at (1.3,-1.84) {$h'$};
+  \draw[->] (ch) -- (cp); \draw[->] (cp) -- (cl); \draw[->] (cl) -- (cho);
+  \node[lanelab, anchor=east] at (1.9,-1.84) {$D_a$};
+  \node[tensor] (dh) at (2.06,-1.84) {$h$};
+  \node[free, minimum width=0.2in] (dp) at (2.42,-1.84) {$\unf^{\downarrow}$};
+  \node[lin] (dl) at (2.9,-1.84) {$L_{9a\to a}$};
+  \node[tensor] (dho) at (3.3,-1.84) {$h'$};
+  \draw[->] (dh) -- (dp); \draw[->] (dp) -- (dl); \draw[->] (dl) -- (dho);
+  \node[lanelab, anchor=east] at (3.9,-1.84) {$U_a$};
+  \node[tensor] (uh) at (4.06,-1.84) {$h$};
+  \node[free, minimum width=0.2in] (uu) at (4.4,-1.84) {$\uparrow_2$};
+  \node[free, minimum width=0.2in] (up) at (4.74,-1.84) {$\unf$};
+  \node[lin] (ul) at (5.2,-1.84) {$L_{9a\to a}$};
+  \node[tensor] (uho) at (5.6,-1.84) {$h'$};
+  \draw[->] (uh) -- (uu); \draw[->] (uu) -- (up); \draw[->] (up) -- (ul); \draw[->] (ul) -- (uho);
+  % legend
+  \node[anchor=north west, font=\scriptsize, text width=7.3in, align=left, inner sep=0pt] at (-0.3,-2.12)
+    {\swg\ object of a sparse-transformers class ($S_\kappa$, $\kappa\le n$)\quad
+     \swo\ sparsifiable, not trivially mappable: none\quad
+     \swn\ parameter-free\quad
+     \sww\ composite\\
+     \swb\ substitutable (attention-free attention, dynamic tanh)\quad
+     \swd\ identity for $a=b$\quad
+     $\circ$ zero-initialised};
 \end{tikzpicture}}
-\caption{Lanes are the map sizes, edge labels the channel counts (Table 1 defines the symbols). Each decoder block concatenates the tensor arriving from below with one encoder output of its lane (the three skips of a lane pair in reverse order with the encoder outputs of that lane). In $A_a$ the $m=hw=64$ pixels are the tokens, $[Q;K;V]=W_{qkv}N_a(X)+b$, the softmax runs over the key index. $\tau(t)=(\cos\omega_i t)_{i<32}\oplus(\sin\omega_i t)_{i<32}$, $\omega_i=10^{-4i/32}$: the positional table of a transformer at the real argument $t$. A composite box takes the colour of its weight-carrying parts.}
-\end{figure}
-
-\begin{minipage}[t]{0.615\textwidth}
 \vspace{0pt}
-\scriptsize
-\setlength{\tabcolsep}{3pt}
-\renewcommand{\arraystretch}{1.0}
-\begin{tabular}{@{}llccr@{\hspace{4pt}}c@{}}
+{\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\renewcommand{\arraystretch}{0.93}
+\begin{tabular}{@{}>{$}p{0.42in}<{$}>{\raggedright\arraybackslash}p{1.72in}>{\raggedright\arraybackslash}p{2.9in}>{\raggedleft\arraybackslash}p{1.08in}>{\raggedright\arraybackslash}p{1.05in}@{}}
 \toprule
-stage & operation & map & channels & parameters & \\
+ & domain $\to$ codomain & definition & parameters & sparse-transformers \\
 \midrule
-input & $x\in\R^{3\times64\times64}$, pixels in $[0,1]$ & $64^2$ & 3 & & \\
-time & $e=L_{256\to256}\,\sigma\,L_{64\to256}\,\tau(t)$ & & $64\to256\to256$ & 82\,432 & \swg \\
-stem & $h=C_{3\to64}\,x$ & $64^2$ & $3\to64$ & 1\,792 & \swo \\
-encoder & $R_{64\to64}$, $R_{64\to64}$ & $64^2$ & $64\to64\to64$ & 214\,016 & \swo \\
- & $h\leftarrow D_{64}h$ & $64^2\to32^2$ & 64 & 36\,928 & \swo \\
- & $R_{64\to128}$, $R_{128\to128}$ & $32^2$ & $64\to128\to128$ & 657\,408 & \swo \\
- & $h\leftarrow D_{128}h$ & $32^2\to16^2$ & 128 & 147\,584 & \swo \\
- & $R_{128\to192}$, $R_{192\to192}$ & $16^2$ & $128\to192\to192$ & 1\,440\,832 & \swo \\
- & $h\leftarrow D_{192}h$ & $16^2\to8^2$ & 192 & 331\,968 & \swo \\
- & $R_{192\to256}$, $R_{256\to256}$ & $8^2$ & $192\to256\to256$ & 2\,527\,360 & \swo \\
-middle & $R_{256\to256}$ & $8^2$ & 256 & 1\,312\,768 & \swo \\
- & $A_{256}$, 4 heads of 64 channels & $8^2$ & $256\to768\to256$ & 263\,680 & \swb \\
- & $R_{256\to256}$ & $8^2$ & 256 & 1\,312\,768 & \swo \\
-decoder & $(\cat\,R_{\cdot\to256})\times3$ & $8^2$ & $512,\,512,\,448\to256$ & 5\,939\,328 & \swo \\
- & $h\leftarrow U_{256}h$ & $8^2\to16^2$ & 256 & 590\,080 & \swo \\
- & $(\cat\,R_{\cdot\to192})\times3$ & $16^2$ & $448,\,384,\,320\to192$ & 3\,508\,416 & \swo \\
- & $h\leftarrow U_{192}h$ & $16^2\to32^2$ & 192 & 331\,968 & \swo \\
- & $(\cat\,R_{\cdot\to128})\times3$ & $32^2$ & $320,\,256,\,192\to128$ & 1\,626\,240 & \swo \\
- & $h\leftarrow U_{128}h$ & $32^2\to64^2$ & 128 & 147\,584 & \swo \\
- & $(\cat\,R_{\cdot\to64})\times3$ & $64^2$ & $192,\,128,\,128\to64$ & 497\,856 & \swo \\
-head & $y=C'_{64\to3}\,\sigma\,N_{64}\,h$ & $64^2$ & $64\to3$ & 1\,859 & \swo \\
+\sigma & $\R\to\R$, elementwise & $x\mapsto x/(1+e^{-x})$ & 0 & \swn \\
+\tau & $\R\to\R^{64}$ & $t\mapsto(\cos\omega_i t)_{i<32}\oplus(\sin\omega_i t)_{i<32}$, $\omega_i=10^{-i/8}$ & 0 & \swn \\
+L_{n\to m} & $\R^{n}\to\R^{m}$ per position & $v\mapsto Wv+b$, $W\in\R^{m\times n}$, $b\in\R^{m}$ & $nm+m$ & \swg\ \texttt{SparseLinear}, $\kappa=n$ \\
+L^{\circ} & as $L$ & $W=0$, $b=0$ at initialisation & & \swg \\
+\unf & $\R^{a\times h\times w}\to\R^{9a\times h\times w}$ & $(\unf h)_{(c,p,q),i,j}=h_{c,i+p,j+q}$, $p,q\in\{-1,0,1\}$, zero padding & 0 & \swn \\
+\unf^{\downarrow} & $\R^{a\times h\times w}\to\R^{9a\times h/2\times w/2}$ & $(\unf^{\downarrow}h)_{(c,p,q),i,j}=h_{c,2i+p,2j+q}$ & 0 & \swn \\
+\uparrow_2 & $\R^{a\times h\times w}\to\R^{a\times2h\times2w}$ & $(\uparrow_2h)_{c,i,j}=h_{c,\lfloor i/2\rfloor,\lfloor j/2\rfloor}$ & 0 & \swn \\
+N_a & $\R^{a\times h\times w}\to\R^{a\times h\times w}$ & $\gamma_c\,(h_{c,i,j}-\mu_g)/\sqrt{v_g+10^{-5}}+\beta_c$; $\mu_g,v_g$: mean, variance of group $g\ni c$ ($a/32$ channels, all positions) & $2a$ & \swb\ \texttt{DyT}, \texttt{RMSNorm} \\
+F & $\R^{b\times h\times w}\times\R^{2b}\to\R^{b\times h\times w}$ & $(z,[s;u])\mapsto z\odot(1+s)+u$, $s,u$ broadcast over positions & 0 & \swn \\
+\Phi_a & $\R^{3a\times h\times w}\to\R^{a\times h\times w}$ & 4 heads of $a/4$ channels over the $m=hw$ positions; $H_j=V_j\,\mathrm{softmax}(K_j^{\top}Q_j/\sqrt{a/4})$, softmax over keys; output $[H_1;\dots;H_4]$ & 0 & \swb\ \texttt{AFTConv}, \texttt{AFTRecurrence} (causal) \\
+\Vert & $\R^{a\times h\times w}\times\R^{c\times h\times w}\to\R^{(a+c)\times h\times w}$ & channel concatenation & 0 & \swn \\
 \midrule
-total & & & & 20\,972\,867 & \\
+C_{a\to b} & $\R^{a\times h\times w}\to\R^{b\times h\times w}$ & $L_{9a\to b}\circ\unf$ & $9ab+b$ & \sww \\
+D_a & $\R^{a\times h\times w}\to\R^{a\times h/2\times w/2}$ & $L_{9a\to a}\circ\unf^{\downarrow}$ & $9a^2+a$ & \sww \\
+U_a & $\R^{a\times h\times w}\to\R^{a\times2h\times2w}$ & $C_{a\to a}\circ\uparrow_2$ & $9a^2+a$ & \sww \\
+R_{a\to b} & $\R^{a\times h\times w}\times\R^{256}\to\R^{b\times h\times w}$ & $(h,e)\mapsto S(h)+C^{\circ}_{b\to b}\,\sigma\,F\big(N_b\,C_{a\to b}\,\sigma\,N_a h,\;L_{256\to2b}\,\sigma(e)\big)$; $S=L_{a\to b}$ if $a\neq b$, else $S=\mathrm{id}$ & $2a+9ab+9b^2+518b$\newline$+[a\neq b](ab+b)$ & \sww \\
+A_a & $\R^{a\times h\times w}\to\R^{a\times h\times w}$ & $X\mapsto X+L^{\circ}_{a\to a}\,\Phi_a\,L_{a\to3a}\,N_a X$ & $4a^2+6a$ & \sww \\
 \bottomrule
 \end{tabular}
-\captionof{table}{Stages in order of execution. $R_{a\to b}(h,e)=S(h)+C'_{b\to b}\,\sigma\!\big(N_b(C_{a\to b}\,\sigma\,N_a h)\odot(1+s(e))+u(e)\big)$ with $[s(e);u(e)]=L_{256\to2b}\,\sigma(e)\in\R^{2b}$ broadcast over pixels and $S$ the identity when $a=b$, else $C^1_{a\to b}$ ($2a+9ab+9b^2+518b+[a\neq b](ab+b)$ parameters). $A_a(X)=X+W_o[H_1;\dots;H_4]+b_o$ ($4a^2+6a$). $C_{a\to b}$: $9ab+b$; $D_a$, $U_a$: $9a^2+a$; $L_{a\to b}$, $C^1_{a\to b}$: $ab+b$; $N_a$: $2a$.}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.365\textwidth}
-\vspace{0pt}
-\scriptsize
-\setlength{\tabcolsep}{2pt}
-\renewcommand{\arraystretch}{1.0}
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.27\linewidth}>{\raggedright\arraybackslash}p{0.70\linewidth}@{}}
+
+\vspace{3pt}
+\begin{tabular}[t]{@{}>{\raggedright\arraybackslash}p{0.72in}>{\raggedright\arraybackslash}p{2.25in}>{\raggedleft\arraybackslash}p{0.6in}@{}}
 \toprule
-\multicolumn{2}{@{}l}{architecture} \\
+stage & blocks & parameters \\
 \midrule
-widths & $64\cdot(1,2,3,4)$ at $64^2,32^2,16^2,8^2$ \\
-blocks per level & 2 (encoder), 3 (decoder) \\
-attention & middle block only, 4 heads \\
-normalisation & group norm, 32 groups \\
-nonlinearity & SiLU \\
-dropout & 0 \\
-conditioning & scale and shift from $e\in\R^{256}$ \\
-zero-initialised & $C'$ in every $R$, $W_o$, head conv \\
+time & $L_{256\to256}\,\sigma\,L_{64\to256}\,\tau$ & 82\,432 \\
+stem $64^2$ & $C_{3\to64}$ & 1\,792 \\
+encoder $64^2$ & $R_{64\to64}$, $R_{64\to64}$ & 214\,016 \\
+$64^2\to32^2$ & $D_{64}$ & 36\,928 \\
+encoder $32^2$ & $R_{64\to128}$, $R_{128\to128}$ & 657\,408 \\
+$32^2\to16^2$ & $D_{128}$ & 147\,584 \\
+encoder $16^2$ & $R_{128\to192}$, $R_{192\to192}$ & 1\,440\,832 \\
+$16^2\to8^2$ & $D_{192}$ & 331\,968 \\
+encoder $8^2$ & $R_{192\to256}$, $R_{256\to256}$ & 2\,527\,360 \\
+middle $8^2$ & $R_{256\to256}$, $A_{256}$, $R_{256\to256}$ & 2\,889\,216 \\
+\bottomrule
+\end{tabular}\hfill
+\begin{tabular}[t]{@{}>{\raggedright\arraybackslash}p{0.72in}>{\raggedright\arraybackslash}p{2.25in}>{\raggedleft\arraybackslash}p{0.6in}@{}}
+\toprule
+stage & blocks & parameters \\
 \midrule
-\multicolumn{2}{@{}l}{diffusion and training (CelebA config)} \\
+decoder $8^2$ & $R_{512\to256}$, $R_{512\to256}$, $R_{448\to256}$ & 5\,939\,328 \\
+$8^2\to16^2$ & $U_{256}$ & 590\,080 \\
+decoder $16^2$ & $R_{448\to192}$, $R_{384\to192}$, $R_{320\to192}$ & 3\,508\,416 \\
+$16^2\to32^2$ & $U_{192}$ & 331\,968 \\
+decoder $32^2$ & $R_{320\to128}$, $R_{256\to128}$, $R_{192\to128}$ & 1\,626\,240 \\
+$32^2\to64^2$ & $U_{128}$ & 147\,584 \\
+decoder $64^2$ & $R_{192\to64}$, $R_{128\to64}$, $R_{128\to64}$ & 497\,856 \\
+head $64^2$ & $C^{\circ}_{64\to3}\,\sigma\,N_{64}$ & 1\,859 \\
 \midrule
-steps & $N=50$ \\
-step sizes & $\gamma_k$: linear ramp $10^{-5}\to0.1$, mirrored; $T=\sum_k\gamma_k=2.50$ \\
-prior & $\mathcal N(m\mathbf 1,\,0.5\,I)$, $m$ = mean pixel of 100 images \\
-loss & mean matching, $|\varphi(x_{k+1},T{-}t_k)-x_{k+1}-\text{target}_k|^2$ \\
-optimiser & Adam, $10^{-4}$, gradient norm clipped at 1 \\
-EMA & 0.999 (used for simulation and sampling) \\
-batch & 128 \\
-cache & $300$ trajectories $\times\,50$ steps, refreshed every 100 steps \\
-IPF & 20 iterations $\times$ 50\,000 steps per half-step \\
-data & centre crop 140, resize 64, random flip \\
+total & & 20\,972\,867 \\
 \bottomrule
 \end{tabular}
-\end{minipage}
 
-\vspace{2pt}
-{\scriptsize {\scshape Fan-in.} A sparse linear layer $S:\R^{n_{\mathrm{in}}}\to\R^{n_{\mathrm{out}}}$ with fan-in $K$ computes $S(x)=(M\odot W)x+b$, $M\in\{0,1\}^{n_{\mathrm{out}}\times n_{\mathrm{in}}}$ with $K$ ones per row drawn uniformly without replacement ($1\le K\le n_{\mathrm{in}}$; $K=n_{\mathrm{in}}$ is the dense map; the masked dense weight and the $n_{\mathrm{out}}\times K$ weight with an index table are two implementations of the same map). $K$ fixes in-degrees, not the maximum degree $K_G$ of the network graph: with $k^-_i=\sum_j M_{ij}=K$ for every output unit $i$ and $d^+_j=\sum_i M_{ij}$ for every input unit $j$,
-\[
-\mathbb E\,d^+_j=\frac{n_{\mathrm{out}}K}{n_{\mathrm{in}}},\qquad k_v=K_{l(v)}+d^+_v \text{ for a hidden unit } v \text{ of layer } l(v),\qquad K_G:=\max_v k_v\;\ge\;\max_l K_l,
-\]
-with equality only for supports without reuse, which random supports do not enforce. The fan-in $K$ (per layer, $K_l$) is the quantity of interest; a green box is such a map for any $K\le n_{\mathrm{in}}$.}
+\vspace{3pt}
+{\scshape Fan-in.}
+\vspace{-9pt}
+\begin{gather*}
+S_\kappa:\R^{n}\to\R^{m},\;\; S_\kappa(x)=(M\odot W)x+b,\;\; M\in\{0,1\}^{m\times n},\;\; \textstyle\sum_{j}M_{ij}=\kappa\;\;\forall i\ \text{(rows uniform)},\;\; 1\le\kappa\le n,\;\; S_n=L_{n\to m},\;\; \kappa=n\ \text{in }s_\theta;\\[-2pt]
+G=(V,E),\;\; (j\to i)\in E\iff M_{ij}=1;\;\;
+k^{-}_i=\textstyle\sum_j M_{ij}=\kappa,\;\; k^{+}_j=\textstyle\sum_i M_{ij},\;\; \mathbb{E}\,k^{+}_j=\tfrac{m\kappa}{n},\;\; k_v=k^{-}_v+k^{+}_v;\;\;
+K_G:=\max_{v}k_v\ge\max_{v}k^{-}_v=\max_{l}\kappa_l .
+\end{gather*}}
 \end{document}
