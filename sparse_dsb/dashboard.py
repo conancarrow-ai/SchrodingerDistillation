@@ -524,11 +524,18 @@ def toy_tab(runs: list[dict], figures_of: dict, out: Path, cache: FigureCache) -
         return "".join(parts + ["<p class='muted'>no toy runs yet (bash slurm/toy_runs.sh)</p>"])
     order = {name: index for index, name in enumerate(TOY_DISTRIBUTIONS)}
     variant_order = {name: index for index, name in enumerate(TOY_VARIANTS)}
-    distributions = sorted({run["distribution"] for run in toy_runs}, key=lambda name: (order.get(name, 99), name))
-    for distribution in distributions:
-        group = sorted((run for run in toy_runs if run["distribution"] == distribution),
+    for run in toy_runs:
+        run["group"] = run["name"].removeprefix("toy_").rsplit("_", 1)[0]
+    groups = sorted({(run["group"], run["distribution"]) for run in toy_runs}, key=lambda item: (order.get(item[1], 99), item[0]))
+    for distribution, _ in [(group, dist) for group, dist in groups]:
+        group = sorted((run for run in toy_runs if run["group"] == distribution),
                        key=lambda run: (variant_order.get(run["variant"], 99), run["name"]))
-        parts.append(f"<h3>{escape_html(distribution)}</h3>")
+        info = next((run["info"] for run in group if run["info"].get("mean_final_vector")), {})
+        prior = ""
+        if info:
+            mean = ", ".join(f"{value:.2f}" for value in info["mean_final_vector"])
+            prior = f" <span class='muted'>{escape_html(group[0]['distribution'])}, prior N(({mean}), {info['var_final']:.2f} I)</span>"
+        parts.append(f"<h3>{escape_html(distribution)}{prior}</h3>")
         rows = []
         for run in group:
             metrics, latest = run["toy_metrics"], run["latest"]
