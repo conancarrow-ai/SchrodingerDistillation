@@ -117,7 +117,8 @@ def test_score_network_matches_reference_on_shared_weights(check_close):
     generator = np.random.default_rng(0)
     x = generator.standard_normal((64, 2)).astype(np.float32) * 7
     t = generator.uniform(0, 0.2, 64).astype(np.float32)
-    port = np.asarray(jax.vmap(model)(jnp.asarray(x), jnp.asarray(t)))
+    with jax.default_matmul_precision("highest"):
+        port = np.asarray(jax.vmap(model)(jnp.asarray(x), jnp.asarray(t)))
     with torch.no_grad():
         expected = reference(torch.tensor(x), torch.tensor(t)[:, None]).numpy()
     check_close("score_network", port, expected, rtol=1e-5, atol=1e-5)
