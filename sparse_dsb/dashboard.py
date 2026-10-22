@@ -38,6 +38,7 @@ import traceback
 from pathlib import Path
 
 import numpy as np
+from PIL import Image
 import yaml
 
 from .plots import plot_losses, save_image_grid
@@ -482,8 +483,26 @@ nav.tabs{border-bottom:1px solid #ccc;margin:12px 0 0}nav.tabs button{font:inher
 nav.tabs button.active{color:#222;background:#f2f2f2}section.tab{display:none}section.tab.active{display:block}"""
 
 SCRIPT = """(function () {
-  // A click writes the chosen tab into the hash, so the periodic reload (at the current URL) and a bookmark keep it.
-  if (RELOAD_MS > 0) { window.setTimeout(function () { window.location.reload(); }, RELOAD_MS); }
+  // The page reloads itself every RELOAD_MS. Across reloads it keeps the chosen tab (hash and localStorage),
+  // which run sections are open (localStorage, keyed by the section id) and the scroll position (sessionStorage).
+  var openKey = 'sparse_dsb_dashboard_open', scrollKey = 'sparse_dsb_dashboard_scroll';
+  var state = {};
+  try { state = JSON.parse(localStorage.getItem(openKey) || '{}') || {}; } catch (e) { state = {}; }
+  var sections = document.querySelectorAll('details[id]');
+  for (var d = 0; d < sections.length; d++) {
+    if (Object.prototype.hasOwnProperty.call(state, sections[d].id)) { sections[d].open = !!state[sections[d].id]; }
+    sections[d].addEventListener('toggle', function () {
+      state[this.id] = this.open;
+      try { localStorage.setItem(openKey, JSON.stringify(state)); } catch (e) {}
+    });
+  }
+  try { if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; } } catch (e) {}
+  if (RELOAD_MS > 0) {
+    window.setTimeout(function () {
+      try { sessionStorage.setItem(scrollKey, String(window.pageYOffset)); } catch (e) {}
+      window.location.reload();
+    }, RELOAD_MS);
+  }
   var key = 'sparse_dsb_dashboard_tab', fallback = 'runs';
   var buttons = document.querySelectorAll('nav.tabs button'), panels = document.querySelectorAll('section.tab');
   function known(name) { return !!(name && document.getElementById('tab-' + name)); }
@@ -493,11 +512,23 @@ SCRIPT = """(function () {
   }
   function choose() {
     var name = window.location.hash ? window.location.hash.substring(1) : '';
-    if (name.indexOf('run-') === 0) { show('runs'); var target = document.getElementById(name); if (target) { target.open = true; target.scrollIntoView(); } return; }
+    if (name.indexOf('run-') === 0) {
+      // a run link: open and show that section once, then drop the hash so later reloads keep the scroll position instead
+      show('runs'); var target = document.getElementById(name);
+      if (target) { target.open = true; target.scrollIntoView(); }
+      try { history.replaceState(null, '', '#runs'); } catch (e) {}
+      return true;
+    }
     if (!known(name)) { try { name = localStorage.getItem(key); } catch (e) { name = ''; } }
     show(known(name) ? name : fallback);
   }
-  choose();
+  var jumped = choose();
+  if (!jumped) {
+    try {
+      var y = sessionStorage.getItem(scrollKey);
+      if (y !== null) { sessionStorage.removeItem(scrollKey); window.scrollTo(0, parseInt(y, 10) || 0); }
+    } catch (e) {}
+  }
   for (var k = 0; k < buttons.length; k++) {
     buttons[k].addEventListener('click', function () {
       var name = this.getAttribute('data-tab');
@@ -513,7 +544,11 @@ SCRIPT = """(function () {
 def figure(path: Path | None, caption: str, width: int) -> str:
     if path is None:
         return f"<figure style='width:{width}px'><figcaption class='muted'>{escape_html(caption)}: not available yet</figcaption></figure>"
-    return (f"<figure style='width:{width}px'><a href='{escape_html(path.name)}'><img src='{escape_html(path.name)}' alt='{escape_html(caption)}' style='width:{width}px'></a>"
+    with Image.open(path) as image:
+        pixels_wide, pixels_high = image.size
+    height = round(width * pixels_high / pixels_wide)
+    return (f"<figure style='width:{width}px'><a href='{escape_html(path.name)}'><img src='{escape_html(path.name)}' alt='{escape_html(caption)}' "
+            f"width='{width}' height='{height}' style='width:{width}px;height:auto'></a>"
             f"<figcaption>{escape_html(caption)}</figcaption></figure>")
 
 
@@ -627,7 +662,7 @@ def generate(out: Path, state: Path, cycle: int, loop_seconds: int) -> str:
     cycle_note = (f"Dashboard cycle {cycle} on {socket.gethostname()} (Slurm job {os.environ.get('SLURM_JOB_ID', 'none')}) "
                   f"regenerated the page at {now} in {seconds:.1f} s; {refresh}.")
     parts = [f"<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Schrödinger distillation dashboard</title><style>{CSS}</style><noscript><style>section.tab{{display:block}}</style></noscript></head><body>",
-         f"<h1>Schrödinger distillation: IPF on sparse-transformers models</h1><p class='muted'>Generated {now}; {refresh}; the selected tab is kept.</p>",
+         f"<h1>Schrödinger distillation: IPF on sparse-transformers models</h1><p class='muted'>Generated {now}; {refresh}; the tab, the open run sections and the scroll position are kept.</p>",
          "<nav class='tabs'>" + "".join(f"<button type='button' data-tab='{name}'>{escape_html(label)}</button>" for name, label in TABS) + "</nav>",
          "<section class='tab' id='tab-runs'><h2>Runs</h2>",
          "<p class='caption'>One row per directory under runs/. K is the fan-in of the sparse linear layers; parameters are stored / active (info.json); "
