@@ -148,6 +148,42 @@ forward chain the prior variance within 12 percent (seed 0; seed 1 gives 35
 and 30 percent, so the 25 percent bounds hold at this budget for the seed the
 test fixes, and a larger budget is the way to make them hold for every seed).
 
+## Part 4: the toy distributions of the reference code (`sparse_dsb/toy.py`, `tests/test_toy.py`)
+
+The reference code learns four two-dimensional distributions (`bridge/data/two_dim.py`: moon, scurve,
+circle, mixture) with the settings of `conf/dataset/2d.yaml`: 20 steps of constant gamma 0.01 (T = 0.2),
+20 IPF iterations of 10 000 steps, batch 512, learning rate 1e-4, drift matching (`mean_match: False`,
+the network output is added to x), no EMA, no gradient clipping, a fresh network for every half-step
+(`use_prev_net: False`), 10 000 points that also fill the whole trajectory cache, and the
+`final_adaptive` prior: mean and variance of the first 100 points. The model is `ScoreNetwork`
+(`bridge/models/basic`): the encoders 2 -> 16 -> 32 of x and 16 -> 16 -> 32 of the Fairseq sinusoidal
+embedding of t, concatenated and decoded by 64 -> 128 -> 128 -> 2 with leaky ReLU between the layers,
+26 498 parameters.
+
+`configs/toy.yaml` reproduces these settings for the port; `slurm/toy_runs.sh` runs every distribution
+with four networks: the reference network (dense `eqx.nn.Linear`), and the same network with every linear
+layer replaced by a sparse-transformers layer: st's masked `SparseLinear` with the full support
+(maskfull: the fan-in equals the input width, the mask is all ones), st's masked layer with fan-in 32
+(mask32: 9 922 of the 26 498 weights active) and z1t's gather `SparseLinear` with fan-in 32 (gather32,
+the same map stored as gather indices). The fan-in is clamped to each layer's input width, so the two
+narrow encoder layers stay dense.
+
+Checks in `tests/test_toy.py`: the point generators follow the reference recipe (standardised to zero
+mean and unit variance over all entries then scaled by 7 for moon and scurve, radii 10 and 5 for circle,
+unit Gaussians at x = -7 and 7 for mixture, seeded and reproducible); the prior is the first hundred
+points, so the mixture prior sits on the left mode as in the reference; the sinusoidal embedding and the
+whole score network agree with the torch reference on shared weights to 1e-7 (full-precision matmuls;
+TF32 gives 2.5e-4); every sparse layer has the clamped fan-in; and a tiny toy IPF (4 steps, 2
+iterations of 20 steps) runs on the GPU with the dense and the masked network and writes the metrics,
+figures and checkpoints.
+
+Each run logs, at the end of every half-step, the energy distance between 1000 final samples and 1000
+target points (`logs/toy_metrics.csv`: backward samples against the data, forward samples against prior
+samples; `E 2|X - Y| - |X - X'| - |Y - Y'|`, zero for equal distributions) and draws the samples over the
+target and the chains of 12 particles. The dashboard tab "Toy distribution validation" places the four
+networks side by side for every distribution with those figures, the energy distance along the IPF
+iterations and a summary table.
+
 ## Findings: where the port and the reference differ
 
 None of these changes a compared number beyond the tolerances above; the tests

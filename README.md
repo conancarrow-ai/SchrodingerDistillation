@@ -116,6 +116,11 @@ iterations on 8x8 images of random colours and checks that the backward chain
 reaches the data statistics and the forward chain the prior variance. The
 suite runs on a GPU: `sbatch --job-name=tests slurm/run.sbatch python -m pytest -q tests`.
 
+Part 4 of `docs/validation.md` learns the toy distributions of the reference code (moon, S curve,
+concentric circles, mixture of Gaussians) with the reference score network and with its linear layers
+replaced by sparse-transformers layers (`configs/toy.yaml`, `bash slurm/toy_runs.sh`); the dashboard tab
+"Toy distribution validation" shows them side by side.
+
 ### Dashboard (`docs/dashboard.md`)
 
 `python -m sparse_dsb.dashboard --loop 120` (job `slurm/dashboard_loop.sbatch`)
