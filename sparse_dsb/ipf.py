@@ -57,6 +57,7 @@ from .langevin import record_init_langevin, record_langevin_seq
 from .models import ModelConfig, build_model, parameter_counts
 from .plots import save_image_grid
 from .schedule import cumulative_time, make_gammas
+from .toy import ScoreNetwork, ToyModelConfig, draw_points, draw_samples, draw_trajectories, energy_distance, toy_prior
 
 
 @dataclass
@@ -67,9 +68,11 @@ class IPFConfig:
     gamma_max: float = 0.1
     gamma_space: str = "linspace"
     mean_match: bool = True
-    # prior N(mean_final, var_final)
+    # prior N(mean_final, var_final): a fixed mean, the mean pixel of the first 100 images (adaptive_mean,
+    # images) or the mean and variance of the first 100 points (final_adaptive, toy distributions)
     var_final: float = 0.5
     adaptive_mean: bool = True
+    final_adaptive: bool = False
     mean_final: float = 0.0
     # optimisation
     n_ipf: int = 20
@@ -136,8 +139,91 @@ class CSVLog:
         self.handle.flush()
 
 
-class IPF:
+class ImageProblem:
+    """Images in [0, 1] of shape (C, H, W) drawn from a uint8 NHWC array, with the reference random flip,
+    sample grids as figures and the adaptive prior mean of the reference code."""
+
     def __init__(self, config: IPFConfig, model_config: ModelConfig, images_uint8, out_dir: str):
+        self.model_config, self.out_dir = model_config, out_dir
+        self.array = np.asarray(images_uint8)
+        self.shape = (model_config.channels, model_config.image_size, model_config.image_size)
+        mean = adaptive_mean(images_uint8) if config.adaptive_mean else config.mean_final
+        self.mean_final, self.var_final = np.float32(mean), float(config.var_final)
+        self.random_flip = config.random_flip
+
+    def sample(self, key, array, batch_size: int):
+        return sample_images(key, array, batch_size, self.random_flip)
+
+    def build_model(self, key):
+        return build_model(self.model_config, key)
+
+    def info(self) -> dict:
+        return {"kind": "images", "sequence": self.model_config.sequence, "tokens": self.model_config.tokens}
+
+    def write_samples(self, init_x, x_tot, i: int, n: int, direction: str):
+        directory = os.path.join(self.out_dir, "im", f"{direction}_{n}_{i}")
+        save_image_grid(init_x, os.path.join(directory, "im_grid_first.png"))
+        save_image_grid(x_tot[-1], os.path.join(directory, "im_grid_final.png"))
+
+
+class ToyProblem:
+    """Points of a toy two-dimensional distribution (sparse_dsb/toy.py), the final_adaptive prior of the
+    reference code, scatter figures and the energy distance of the samples to the data and to the prior."""
+
+    def __init__(self, config: IPFConfig, model_config: ToyModelConfig, points, out_dir: str):
+        self.model_config, self.out_dir = model_config, out_dir
+        self.array = np.asarray(points, dtype=np.float32)
+        self.shape = (self.array.shape[1],)
+        if config.final_adaptive:
+            self.mean_final, self.var_final = toy_prior(self.array)
+        else:
+            self.mean_final, self.var_final = np.full(self.shape, config.mean_final, np.float32), float(config.var_final)
+        generator = np.random.default_rng(1)
+        count = min(config.plot_npar, self.array.shape[0])
+        self.data_target = self.array[generator.choice(self.array.shape[0], count, replace=False)]
+        self.prior_target = (self.mean_final + np.sqrt(self.var_final) * generator.standard_normal((count, self.shape[0]))).astype(np.float32)
+        self.metrics = CSVLog(os.path.join(out_dir, "logs", "toy_metrics.csv"),
+                              ["fb", "n", "i", "energy_to_data", "energy_to_prior", "mean_x", "mean_y", "var"])
+        draw_points(os.path.join(out_dir, "im", "data.png"), self.data_target, self.mean_final, self.var_final,
+                    f"data ({count} of {self.array.shape[0]} points), prior mean and sigma")
+
+    def sample(self, key, array, batch_size: int):
+        index = jax.random.choice(key, array.shape[0], (batch_size,), replace=False)
+        return array[index]
+
+    def build_model(self, key):
+        return ScoreNetwork(self.model_config, key)
+
+    def info(self) -> dict:
+        return {"kind": "toy", "mean_final_vector": [float(value) for value in self.mean_final],
+                "model": self.model_config.label}
+
+    def write_samples(self, init_x, x_tot, i: int, n: int, direction: str):
+        directory = os.path.join(self.out_dir, "im", f"{direction}_{n}_{i}")
+        final_x = np.asarray(x_tot[-1])
+        to_data, to_prior = energy_distance(final_x, self.data_target), energy_distance(final_x, self.prior_target)
+        self.metrics.log(fb=direction, n=n, i=i, energy_to_data=round(to_data, 5), energy_to_prior=round(to_prior, 5),
+                         mean_x=round(float(final_x[:, 0].mean()), 4), mean_y=round(float(final_x[:, 1].mean()), 4),
+                         var=round(float(final_x.var()), 4))
+        if direction == "b":
+            target, label, distance = self.data_target, "data", to_data
+        else:
+            target, label, distance = self.prior_target, "prior", to_prior
+        title = f"{direction} n={n} i={i}: energy distance to {label} {distance:.3f}"
+        draw_samples(os.path.join(directory, "samples.png"), final_x, target, title, label)
+        draw_trajectories(os.path.join(directory, "trajectories.png"), np.asarray(x_tot), np.asarray(init_x), f"{direction} n={n}: chains")
+
+
+def make_problem(config: IPFConfig, model_config, data, out_dir: str):
+    if isinstance(model_config, ToyModelConfig):
+        return ToyProblem(config, model_config, data, out_dir)
+    if isinstance(model_config, ModelConfig):
+        return ImageProblem(config, model_config, data, out_dir)
+    raise TypeError(f"model_config must be a ModelConfig or a ToyModelConfig, not {type(model_config).__name__}")
+
+
+class IPF:
+    def __init__(self, config: IPFConfig, model_config, data, out_dir: str):
         self.config, self.model_config = config, model_config
         self.out_dir = out_dir
         for sub in ("im", "checkpoints", "logs"):
@@ -160,12 +246,13 @@ class IPF:
         self.time = jnp.asarray(cumulative_time(gammas))
         self.T = float(gammas.sum())
 
-        self.images = place(np.asarray(images_uint8), self.replicated)
-        self.shape = (model_config.channels, model_config.image_size, model_config.image_size)
-        mean = adaptive_mean(images_uint8) if config.adaptive_mean else config.mean_final
-        self.mean_final = jnp.float32(mean)
-        self.var_final = jnp.float32(config.var_final)
+        self.problem = make_problem(config, model_config, data, out_dir)
+        self.array = place(self.problem.array, self.replicated)
+        self.shape = self.problem.shape
+        self.mean_final = jnp.asarray(self.problem.mean_final, jnp.float32)
+        self.var_final = jnp.float32(self.problem.var_final)
         self.std_final = jnp.sqrt(self.var_final)
+        mean = float(np.mean(self.problem.mean_final))
 
         self.key = jax.random.PRNGKey(config.seed)
         self.nets, self.ema = {}, {}
@@ -180,13 +267,12 @@ class IPF:
 
         stored, active = parameter_counts(self.nets["b"])
         self.info = {"parameters_stored": stored, "parameters_active": active, "T": self.T,
-                     "mean_final": float(mean), "var_final": config.var_final,
-                     "sequence": model_config.sequence, "tokens": model_config.tokens,
+                     "mean_final": mean, "var_final": float(self.problem.var_final), **self.problem.info(),
                      "devices": [str(device) for device in self.devices]}
         with open(os.path.join(out_dir, "info.json"), "w") as handle:
             json.dump(self.info, handle, indent=2)
-        print(f"parameters stored={stored:,d} active={active:,d} sequence={model_config.sequence} T={self.T:.4f} "
-              f"mean_final={float(mean):.4f} devices={len(self.devices)} {self.devices}", flush=True)
+        print(f"parameters stored={stored:,d} active={active:,d} shape={self.shape} T={self.T:.4f} "
+              f"mean_final={mean:.4f} var_final={float(self.problem.var_final):.4f} devices={len(self.devices)} {self.devices}", flush=True)
 
     # ------------------------------------------------------------------ setup
     def next_key(self):
@@ -194,7 +280,7 @@ class IPF:
         return key
 
     def build_net(self, direction: str):
-        net = place(build_model(self.model_config, self.next_key()), self.replicated)
+        net = place(self.problem.build_model(self.next_key()), self.replicated)
         self.nets[direction] = net
         self.ema[direction] = eqx.filter(net, eqx.is_inexact_array)
 
@@ -272,9 +358,11 @@ class IPF:
             x_tot, _, _ = record_langevin_seq(key, batched(params, static), x_init, gammas, time, mean_match, sample=True)
             return x_tot
 
+        problem = self.problem
+
         @functools.partial(jax.jit, static_argnames=("batch_size",))
-        def data_batch(key, images, batch_size):
-            x = sample_images(key, images, batch_size, config.random_flip)
+        def data_batch(key, array, batch_size):
+            x = problem.sample(key, array, batch_size)
             return jax.lax.with_sharding_constraint(x, batch_sharding)
 
         @functools.partial(jax.jit, static_argnames=("batch_size",))
@@ -291,7 +379,7 @@ class IPF:
         self._cache_init = cache_init
         self._cache_from_net = cache_from_net
         self._sample = sample
-        self._data_batch = lambda key, batch_size: data_batch(key, self.images, batch_size=batch_size)
+        self._data_batch = lambda key, batch_size: data_batch(key, self.array, batch_size=batch_size)
         self._prior_batch = lambda key, batch_size: prior_batch(key, batch_size=batch_size)
         self._init_trajectories = init_trajectories
 
@@ -378,13 +466,12 @@ class IPF:
             batch = self._prior_batch(batch_key, config.plot_npar)
         params, static = eqx.partition(self.ema_net(direction), eqx.is_inexact_array)
         x_tot = self._sample(chain_key, params, static, batch)
-        self.write_grid(batch, x_tot, i, n, direction)
+        self.write_samples(batch, x_tot, i, n, direction)
 
-    def write_grid(self, batch, x_tot, i, n, direction):
-        init_x, final_x = np.asarray(batch), np.asarray(x_tot[-1])
-        directory = os.path.join(self.out_dir, "im", f"{direction}_{n}_{i}")
-        save_image_grid(init_x, os.path.join(directory, "im_grid_first.png"))
-        save_image_grid(final_x, os.path.join(directory, "im_grid_final.png"))
+    def write_samples(self, batch, x_tot, i, n, direction):
+        init_x, x_tot = np.asarray(batch), np.asarray(x_tot)
+        final_x = x_tot[-1]
+        self.problem.write_samples(init_x, x_tot, i, n, direction)
         self.plot_logger.log(fb=direction, n=n, i=i, init_var=float(init_x.var()), final_var=float(final_x.var()),
                              mean_init=float(init_x.mean()), mean_final=float(final_x.mean()), T=self.T)
         print(f"samples {direction} n={n} i={i}: init var {init_x.var():.4f} final var {final_x.var():.4f} "
@@ -396,7 +483,7 @@ class IPF:
         batch_key, chain_key = jax.random.split(jax.random.PRNGKey(0))
         init_sample = self._data_batch(batch_key, config.plot_npar)
         x_tot = self._init_trajectories(chain_key, init_sample)
-        self.write_grid(init_sample, x_tot, 0, 0, "f")
+        self.write_samples(init_sample, x_tot, 0, 0, "f")
 
         start_it = config.checkpoint_it if config.checkpoint_run else 1
         start_pass = config.checkpoint_pass if config.checkpoint_run else "b"

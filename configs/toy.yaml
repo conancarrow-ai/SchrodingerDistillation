@@ -1,0 +1,46 @@
+# Toy two-dimensional distributions with the settings of conf/dataset/2d.yaml of the reference code:
+# constant gamma 0.01 over 20 steps, 20 IPF iterations of 10 000 steps, batch 512, no EMA, no gradient
+# clipping, a fresh network per half-step, drift matching (mean_match false), final_adaptive prior.
+#   python -m sparse_dsb.train --config configs/toy.yaml --out runs/toy_moon_dense data.distribution=moon
+#   python -m sparse_dsb.train --config configs/toy.yaml --out runs/toy_moon_mask32 data.distribution=moon \
+#       model.sparse_linear=mask model.linear_fan_in=32
+name: toy
+data:
+  kind: toy
+  distribution: scurve
+  npar: 10000
+  seed: 0
+ipf:
+  num_steps: 20
+  gamma_min: 0.01
+  gamma_max: 0.01
+  gamma_space: linspace
+  mean_match: false
+  var_final: 1.0
+  adaptive_mean: false
+  final_adaptive: true
+  mean_final: 0.0
+  n_ipf: 20
+  num_iter: 10000
+  batch_size: 512
+  lr: 1.0e-4
+  grad_clipping: false
+  grad_clip: 1.0
+  ema: false
+  ema_rate: 0.999
+  use_prev_net: false
+  cache_npar: 10000
+  num_cache_batches: 1
+  cache_refresh_stride: 100
+  random_flip: false
+  log_stride: 50
+  gif_stride: 10000
+  plot_npar: 1000
+  seed: 0
+model:
+  encoder_layers: [16]
+  pos_dim: 16
+  decoder_layers: [128, 128]
+  x_dim: 2
+  sparse_linear: dense
+  linear_fan_in: null

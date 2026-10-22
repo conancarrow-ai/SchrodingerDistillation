@@ -2,9 +2,12 @@
 
     python -m sparse_dsb.train --config configs/celeba64_smoke.yaml [--out runs/name] [key=value ...]
 
-The yaml has three sections: `ipf:` (IPFConfig), `model:` (ModelConfig) and
-`data:` (path of the preprocessed uint8 array). Trailing key=value overrides
-address fields as ipf.num_iter=200 or model.n_layers=2.
+The yaml has three sections: `ipf:` (IPFConfig), `model:` and `data:`. With
+`data.kind: images` (the default) `data.path` names the preprocessed uint8 array
+and `model:` is a ModelConfig; with `data.kind: toy`, `data.distribution` names
+one of the toy distributions of sparse_dsb/toy.py, `data.npar` and `data.seed`
+draw its points, and `model:` is a ToyModelConfig. Trailing key=value overrides
+address fields as ipf.num_iter=200, model.n_layers=2 or data.distribution=moon.
 """
 from __future__ import annotations
 
@@ -20,6 +23,7 @@ import yaml
 from .data import load_images
 from .ipf import IPF, IPFConfig
 from .models import ModelConfig
+from .toy import ToyModelConfig, toy_points
 
 
 def parse_overrides(pairs: list[str]) -> dict:
@@ -33,10 +37,23 @@ def parse_overrides(pairs: list[str]) -> dict:
     return overrides
 
 
-def build_configs(cfg: dict) -> tuple[IPFConfig, ModelConfig]:
+def build_configs(cfg: dict):
     ipf_config = IPFConfig(**cfg.get("ipf", {}))
-    model_config = ModelConfig(**cfg.get("model", {}))
+    if cfg.get("data", {}).get("kind", "images") == "toy":
+        model_config = ToyModelConfig(**cfg.get("model", {}))
+    else:
+        model_config = ModelConfig(**cfg.get("model", {}))
     return ipf_config, model_config
+
+
+def load_data(data: dict):
+    if data.get("kind", "images") == "toy":
+        points = toy_points(data["distribution"], int(data.get("npar", 10000)), int(data.get("seed", 0)))
+        print(f"{points.shape[0]} points of {data['distribution']} (seed {data.get('seed', 0)})", flush=True)
+        return points
+    images = load_images(data["path"])
+    print(f"images {images.shape} from {data['path']}", flush=True)
+    return images
 
 
 def main(argv=None):
@@ -67,10 +84,9 @@ def main(argv=None):
         print("refusing to train without a GPU", file=sys.stderr, flush=True)
         sys.exit(1)
 
-    images = load_images(cfg["data"]["path"])
-    print(f"images {images.shape} from {cfg['data']['path']}", flush=True)
+    data = load_data(cfg.get("data", {}))
     start = time.time()
-    ipf = IPF(ipf_config, model_config, images, out_dir)
+    ipf = IPF(ipf_config, model_config, data, out_dir)
     ipf.train()
     with open(os.path.join(out_dir, "done.json"), "w") as handle:
         json.dump({"seconds": round(time.time() - start, 1)}, handle)

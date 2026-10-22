@@ -51,7 +51,9 @@ DATA_FACTS = PROJECT / "data" / "celeba64_train.json"
 BENCHMARK = PROJECT / "report" / "benchmark_rtx6000.txt"
 SLURM_LOGS = PROJECT / "slurm" / "logs"
 SCRIPT_STAMP = str(Path(__file__).resolve().stat().st_mtime_ns)
-TABS = (("runs", "Runs"), ("data", "Data"), ("queue", "Queue"), ("benchmark", "Benchmark"))
+TABS = (("runs", "Runs"), ("toy", "Toy distribution validation"), ("data", "Data"), ("queue", "Queue"), ("benchmark", "Benchmark"))
+TOY_DISTRIBUTIONS = ("moon", "scurve", "circle", "mixture")
+TOY_VARIANTS = ("dense", "maskfull", "mask32", "gather32")
 STALE_SECONDS = 20 * 60
 ACTIVE_STATES = ("RUNNING", "COMPLETING", "CONFIGURING")
 DIRECTION_LABEL = {"b": "backward (prior to data)", "f": "forward (data to prior)"}
@@ -275,6 +277,7 @@ def run_status(run: dict, jobs_of_run: list[dict], metrics_path: Path, squeue_er
 
 def scan_run(run_dir: Path, jobs: list[dict], log_runs: dict[Path, Path], squeue_error: str) -> dict:
     run = {"name": run_dir.name, "dir": run_dir, "notes": [], "config": {}, "info": {}, "done": {}, "model": {}, "ipf": {},
+           "kind": "images", "distribution": None, "variant": "", "toy_metrics": {},
            "num_iter": 0, "n_ipf": 0, "metrics": {}, "plot_logs": {}, "metrics_signature": "", "latest": None,
            "elapsed": None, "half_steps": [], "log_tail": [], "latest_log": None,
            "status": "unknown", "status_detail": "", "status_class": "muted"}
@@ -282,6 +285,10 @@ def scan_run(run_dir: Path, jobs: list[dict], log_runs: dict[Path, Path], squeue
         run["config"] = config = read_yaml(run_dir / "config.yaml")
         run["info"], run["done"] = read_json(run_dir / "info.json"), read_json(run_dir / "done.json")
         run["model"], run["ipf"] = config.get("model") or {}, config.get("ipf") or {}
+        data = config.get("data") or {}
+        run["kind"], run["distribution"] = data.get("kind", "images"), data.get("distribution")
+        run["variant"] = run["name"].rsplit("_", 1)[-1] if run["kind"] == "toy" else ""
+        run["toy_metrics"] = read_table(run_dir / "logs" / "toy_metrics.csv") if run["kind"] == "toy" else {}
         run["num_iter"], run["n_ipf"] = int(run["ipf"].get("num_iter") or 0), int(run["ipf"].get("n_ipf") or 0)
         if not config:
             run["notes"].append("config.yaml missing or unreadable")
@@ -320,14 +327,22 @@ def scan_run(run_dir: Path, jobs: list[dict], log_runs: dict[Path, Path], squeue
     return run
 
 
-def grid_files(run_dir: Path, direction: str) -> list[Path]:
-    """im/<direction>_<n>_<i>/im_grid_final.png in half-step order."""
+def grid_files(run_dir: Path, direction: str, filename: str = "im_grid_final.png") -> list[Path]:
+    """im/<direction>_<n>_<i>/<filename> in half-step order."""
     im_dir = run_dir / "im"
     if not im_dir.is_dir():
         return []
     names = sorted((entry.name for entry in im_dir.iterdir() if GRID_DIRECTORY.match(entry.name) and entry.name[0] == direction),
                    key=lambda name: tuple(int(part) for part in name.split("_")[1:]))
-    return [im_dir / name / "im_grid_final.png" for name in names if (im_dir / name / "im_grid_final.png").exists()]
+    return [im_dir / name / filename for name in names if (im_dir / name / filename).exists()]
+
+
+def model_label(run: dict) -> str:
+    model = run["model"]
+    if run["kind"] == "toy":
+        kind = model.get("sparse_linear", "dense")
+        return "dense" if kind == "dense" else f"{kind} K={model.get('linear_fan_in') or 'full'}"
+    return str(model.get("family", ""))
 
 
 def draw_chain_statistics(plot_logs: dict, num_iter: int, n_ipf: int, data_variance, data_mean, mean_final, var_final, path: str):
@@ -406,6 +421,8 @@ def run_figures(run: dict, out: Path, cache: FigureCache, data_variance, data_me
         note("chain statistics: no plot_logs rows yet")
     figures["chain"] = chain_path if chain_path.exists() else None
 
+    if run["kind"] == "toy":
+        return toy_run_figures(run, out, cache, figures, note)
     for direction in ("b", "f"):
         files = grid_files(run_dir, direction)
         latest_path, montage_path = out / f"{name}_latest_{direction}.png", out / f"{name}_montage_{direction}.png"
@@ -422,6 +439,116 @@ def run_figures(run: dict, out: Path, cache: FigureCache, data_variance, data_me
         figures[f"latest_{direction}"] = latest_path if latest_path.exists() else None
         figures[f"montage_{direction}"] = montage_path if montage_path.exists() else None
     return figures
+
+
+def copy_latest(run: dict, out: Path, cache: FigureCache, note, key: str, source: Path | None, target: Path) -> Path | None:
+    if source is None:
+        return target if target.exists() else None
+    note(cache.ensure(f"{key}:{run['name']}", file_signature(source), target,
+                      lambda: render(target, lambda temporary: shutil.copyfile(source, temporary))))
+    return target if target.exists() else None
+
+
+def toy_run_figures(run: dict, out: Path, cache: FigureCache, figures: dict, note) -> dict:
+    name, run_dir = run["name"], run["dir"]
+    data_png = run_dir / "im" / "data.png"
+    figures["data"] = copy_latest(run, out, cache, note, "toydata", data_png if data_png.exists() else None, out / f"{name}_data.png")
+    for direction in ("b", "f"):
+        for filename, kind in (("samples.png", "samples"), ("trajectories.png", "chains")):
+            files = grid_files(run_dir, direction, filename)
+            latest = files[-1] if files else None
+            figures[f"{kind}_{direction}"] = copy_latest(run, out, cache, note, f"toy{kind}{direction}", latest,
+                                                         out / f"{name}_{kind}_{direction}.png")
+            if latest is not None:
+                figures[f"latest_name_{direction}"] = latest.parent.name
+        if not grid_files(run_dir, direction, "samples.png"):
+            note(f"no {DIRECTION_LABEL[direction]} sample figures yet")
+    return figures
+
+
+# ---------------------------------------------------------------- toy distribution validation
+def draw_energy_curves(runs: list[dict], distribution: str, path: str):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    figure, axes = plt.subplots(1, 2, figsize=(9, 3.2))
+    for run in runs:
+        rows = run["toy_metrics"]
+        if not rows or not len(rows["n"]):
+            continue
+        label = model_label(run)
+        backward, forward = rows["fb"] == "b", rows["fb"] == "f"
+        if backward.any():
+            axes[0].plot(rows["n"][backward], rows["energy_to_data"][backward], marker="o", ms=3, label=label)
+        if forward.any():
+            axes[1].plot(rows["n"][forward], rows["energy_to_prior"][forward], marker="o", ms=3, label=label)
+    axes[0].set_title(f"{distribution}: backward samples vs data"); axes[1].set_title(f"{distribution}: forward samples vs prior")
+    for axis in axes:
+        axis.set_xlabel("IPF iteration n"); axis.set_ylabel("energy distance"); axis.set_yscale("log"); axis.grid(alpha=0.3)
+    axes[0].legend(fontsize=8)
+    figure.tight_layout()
+    figure.savefig(path, dpi=120)
+    plt.close(figure)
+
+
+def toy_tab(runs: list[dict], figures_of: dict, out: Path, cache: FigureCache) -> str:
+    toy_runs = [run for run in runs if run["kind"] == "toy"]
+    parts = ["<h2>Toy distribution validation</h2>",
+             "<p class='caption'>The two-dimensional distributions of the reference code (bridge/data/two_dim.py) learnt with its "
+             "settings (conf/dataset/2d.yaml: 20 steps of gamma 0.01, 20 IPF iterations of 10 000 steps, batch 512, drift matching, "
+             "no EMA, a fresh network per half-step, prior from the first 100 points) by the reference score network ported to JAX "
+             "(dense) and by the same network with its linear layers replaced by the sparse-transformers layers: st's masked "
+             "SparseLinear with the full support (mask K=full) or fan-in 32 (mask K=32), and z1t's gather SparseLinear with "
+             "fan-in 32 (gather K=32). Each panel shows the 1000 final samples of the latest half-step over the target cloud; the "
+             "energy distance is between those samples and 1000 target points (0 for equal distributions).</p>"]
+    if not toy_runs:
+        return "".join(parts + ["<p class='muted'>no toy runs yet (bash slurm/toy_runs.sh)</p>"])
+    order = {name: index for index, name in enumerate(TOY_DISTRIBUTIONS)}
+    variant_order = {name: index for index, name in enumerate(TOY_VARIANTS)}
+    distributions = sorted({run["distribution"] for run in toy_runs}, key=lambda name: (order.get(name, 99), name))
+    for distribution in distributions:
+        group = sorted((run for run in toy_runs if run["distribution"] == distribution),
+                       key=lambda run: (variant_order.get(run["variant"], 99), run["name"]))
+        parts.append(f"<h3>{escape_html(distribution)}</h3>")
+        rows = []
+        for run in group:
+            metrics, latest = run["toy_metrics"], run["latest"]
+            energy_data = energy_prior = ""
+            if metrics and len(metrics["n"]):
+                backward, forward = metrics["fb"] == "b", metrics["fb"] == "f"
+                if backward.any():
+                    energy_data = f"{metrics['energy_to_data'][backward][-1]:.3f} (n={int(metrics['n'][backward][-1])})"
+                if forward.any():
+                    energy_prior = f"{metrics['energy_to_prior'][forward][-1]:.3f} (n={int(metrics['n'][forward][-1])})"
+            info = run["info"]
+            parameters = f"{info['parameters_stored']:,} / {info['parameters_active']:,}" if "parameters_stored" in info else ""
+            rows.append([f"<a href='#run-{escape_html(run['name'])}'>{escape_html(model_label(run))}</a>", parameters,
+                         f"<span class='{run['status_class']}'>{escape_html(run['status'])}</span>",
+                         f"{latest['fb']} n={latest['n']} i={latest['i']:,}" if latest else "",
+                         energy_data, energy_prior, f"{latest['last_10pct_loss']:.5f}" if latest else "", duration(run["elapsed"])])
+        parts.append(table(["model", "parameters stored / active", "status", "half-step", "backward: energy distance to data",
+                            "forward: energy distance to prior", "last-10% loss", "elapsed"], rows))
+        for direction, label in (("b", "backward (prior to data)"), ("f", "forward (data to prior)")):
+            cards = []
+            if direction == "b":
+                data_figure = next((figures_of[run["name"]].get("data") for run in group if figures_of[run["name"]].get("data")), None)
+                cards.append(figure(data_figure, f"{distribution}: data and prior", 300))
+            for run in group:
+                figures = figures_of[run["name"]]
+                caption = f"{model_label(run)}: {figures.get(f'latest_name_{direction}', 'no samples yet')}"
+                cards.append(figure(figures.get(f"samples_{direction}"), caption, 300))
+            parts.append(f"<h4>{escape_html(label)}</h4><div class='cards'>{''.join(cards)}</div>")
+        curves = out / f"toy_{distribution}_energy.png"
+        signature = json.dumps([file_signature(run["dir"] / "logs" / "toy_metrics.csv") for run in group])
+        error = cache.ensure(f"toyenergy:{distribution}", signature, curves,
+                             lambda: render(curves, lambda temporary: draw_energy_curves(group, distribution, temporary)))
+        if error:
+            parts.append(f"<p class='warn'>{escape_html(error)}</p>")
+        parts.append("<h4>Energy distance along the IPF iterations</h4>" +
+                     figure(curves if curves.exists() else None, f"{distribution}: energy distance of the final samples, one line per model; "
+                            "n = 0 is the reference Ornstein-Uhlenbeck chain", 900))
+    return "".join(parts)
 
 
 # ---------------------------------------------------------------- data
@@ -582,7 +709,7 @@ def run_row(run: dict) -> list[str]:
     parameters = f"{info['parameters_stored']:,} / {info['parameters_active']:,}" if "parameters_stored" in info else ""
     progress = f"<br><span class='muted'>{100 * latest['progress']:.0f}% of the run</span>" if latest and latest["progress"] is not None else ""
     return [f"<a href='#run-{escape_html(run['name'])}'>{escape_html(run['name'])}</a>",
-            escape_html(model.get("family", "")), escape_html(model.get("n_layers", "")), escape_html(model.get("n_embed", "")),
+            escape_html(model_label(run)), escape_html(model.get("n_layers", "")), escape_html(model.get("n_embed", "")),
             escape_html(model.get("linear_fan_in", "")), escape_html(model.get("patch_size", "")), parameters,
             f"{run['n_ipf']} x {run['num_iter']:,}" if run["num_iter"] else "",
             f"<span class='{run['status_class']}'>{escape_html(run['status'])}</span><br><span class='muted'>{escape_html(run['status_detail'])}</span>",
@@ -595,8 +722,12 @@ def run_row(run: dict) -> list[str]:
 def run_section(run: dict, figures: dict) -> str:
     name, model, latest = run["name"], run["model"], run["latest"]
     position = f"{latest['fb']} n={latest['n']} i={latest['i']:,}" if latest else "no metrics"
-    summary = (f"{escape_html(name)} <span class='muted'>{escape_html(model.get('family', '?'))}, {escape_html(model.get('n_layers', '?'))} blocks, "
-               f"width {escape_html(model.get('n_embed', '?'))}, K {escape_html(model.get('linear_fan_in', '?'))}; "
+    if run["kind"] == "toy":
+        description = f"{escape_html(run['distribution'])}, score network {escape_html(model_label(run))}"
+    else:
+        description = (f"{escape_html(model.get('family', '?'))}, {escape_html(model.get('n_layers', '?'))} blocks, "
+                       f"width {escape_html(model.get('n_embed', '?'))}, K {escape_html(model.get('linear_fan_in', '?'))}")
+    summary = (f"{escape_html(name)} <span class='muted'>{description}; "
                f"<span class='{run['status_class']}'>{escape_html(run['status'])}</span>, {escape_html(position)}</span>")
     opened = " open" if run["status"] in ("running", "running?", "queued") else ""
     parts = [f"<details class='run' id='run-{escape_html(name)}'{opened}><summary>{summary}</summary>"]
@@ -608,13 +739,19 @@ def run_section(run: dict, figures: dict) -> str:
              "checkpoint, against the half-step: backward chains start from the prior and should reach the data statistics, forward chains "
              "start from data and should reach the prior; ref is the reference Ornstein-Uhlenbeck chain before training.</p>" +
              figure(figures.get("chain"), f"{name}: final variance and mean of the sampled chains (logs/plot_logs.csv)", 1100))
-    cards = "".join(figure(figures.get(f"latest_{direction}"),
-                           f"{figures.get(f'latest_name_{direction}', direction)}: {DIRECTION_LABEL[direction]}, final samples", 440)
-                    for direction in "bf")
-    parts.append(f"<h4>Latest sample grids</h4><div class='cards'>{cards}</div>")
-    cards = "".join(figure(figures.get(f"montage_{direction}"), f"{DIRECTION_LABEL[direction]}: first row of the final grid at the last 8 checkpoints", 662)
-                    for direction in "bf")
-    parts.append(f"<h4>Sample grids along the half-steps</h4><div class='cards'>{cards}</div>")
+    if run["kind"] == "toy":
+        cards = [figure(figures.get("data"), "data and prior", 300)]
+        cards += [figure(figures.get(f"{kind}_{direction}"), f"{figures.get(f'latest_name_{direction}', direction)}: {DIRECTION_LABEL[direction]}, {what}", 300)
+                  for direction in "bf" for kind, what in (("samples", "final samples"), ("chains", "chains"))]
+        parts.append(f"<h4>Latest samples</h4><div class='cards'>{''.join(cards)}</div>")
+    else:
+        cards = "".join(figure(figures.get(f"latest_{direction}"),
+                               f"{figures.get(f'latest_name_{direction}', direction)}: {DIRECTION_LABEL[direction]}, final samples", 440)
+                        for direction in "bf")
+        parts.append(f"<h4>Latest sample grids</h4><div class='cards'>{cards}</div>")
+        cards = "".join(figure(figures.get(f"montage_{direction}"), f"{DIRECTION_LABEL[direction]}: first row of the final grid at the last 8 checkpoints", 662)
+                        for direction in "bf")
+        parts.append(f"<h4>Sample grids along the half-steps</h4><div class='cards'>{cards}</div>")
     if run["half_steps"]:
         rows = [[str(row["n"]), row["fb"], f"{row['first_loss']:.5f}", f"{row['last_10pct_loss']:.5f}", f"{row['min_loss']:.5f}",
                  f"{row['iterations']:,}", f"{row['seconds']:.0f}"] for row in run["half_steps"]]
@@ -659,7 +796,9 @@ def generate(out: Path, state: Path, cycle: int, loop_seconds: int) -> str:
     data_html, data_variance, data_mean = data_tab(out, cache)
     runs = [scan_run(run_dir.resolve(), jobs, log_runs, squeue_error)
             for run_dir in sorted(RUNS.iterdir()) if run_dir.is_dir()] if RUNS.is_dir() else []
-    sections = [run_section(run, run_figures(run, out, cache, data_variance, data_mean)) for run in runs]
+    figures_of = {run["name"]: run_figures(run, out, cache, data_variance, data_mean) for run in runs}
+    sections = [run_section(run, figures_of[run["name"]]) for run in runs]
+    toy_html = toy_tab(runs, figures_of, out, cache)
     now = utc_now()
     seconds = time.time() - started
     refresh = f"the data refresh every {loop_seconds} s and the page reloads with them" if loop_seconds else "generated once; rerun to refresh"
@@ -675,6 +814,7 @@ def generate(out: Path, state: Path, cycle: int, loop_seconds: int) -> str:
          table(["run", "family", "blocks", "width", "K", "patch", "parameters", "IPF", "status", "half-step", "step", "latest loss",
                 "last-10% loss", "elapsed", "steps/s"], [run_row(run) for run in runs]) if runs else "<p class='muted'>no runs</p>",
          *sections, "</section>",
+         f"<section class='tab' id='tab-toy'>{toy_html}</section>",
          f"<section class='tab' id='tab-data'>{data_html}</section>",
          f"<section class='tab' id='tab-queue'>{queue_tab(jobs, squeue_error, log_runs, cycle_note)}</section>",
          f"<section class='tab' id='tab-benchmark'>{benchmark_tab()}</section>",
