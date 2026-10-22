@@ -490,7 +490,7 @@ def toy_groups(toy_runs: list[dict]) -> list[tuple[str, list[dict]]]:
     variant_order = {name: index for index, name in enumerate(TOY_VARIANTS)}
     for run in toy_runs:
         run["group"] = run["name"].removeprefix("toy_").rsplit("_", 1)[0]
-    names = sorted({run["group"] for run in toy_runs}, key=lambda name: (order.get(name.rstrip("centred"), 99), name))
+    names = sorted({run["group"] for run in toy_runs}, key=lambda name: (order.get(name.removesuffix("centred"), 99), name))
     return [(name, sorted((run for run in toy_runs if run["group"] == name), key=lambda run: (variant_order.get(run["variant"], 99), run["name"])))
             for name in names]
 
@@ -586,7 +586,7 @@ def draw_toy_energy_strip(groups: list[tuple[str, list[dict]]], path: str):
             if backward.any():
                 axis.plot(rows["n"][backward], rows["energy_to_data"][backward], marker="o", ms=2, lw=1,
                           color=f"C{variant_order.get(run['variant'], 9)}", label=TOY_VARIANT_LABELS.get(run["variant"], run["variant"]))
-        axis.set_title(name, fontsize=8); axis.set_yscale("log"); axis.grid(alpha=0.3)
+        axis.set_title(name, fontsize=8); axis.grid(alpha=0.3)
         axis.xaxis.set_major_locator(MaxNLocator(integer=True)); axis.tick_params(labelsize=7)
         axis.set_xlabel("IPF iteration", fontsize=7)
     axes[0][0].set_ylabel("energy distance to data", fontsize=7)
