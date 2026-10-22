@@ -66,6 +66,12 @@ Queue: this user's Slurm jobs (id, name, state, time, limit, partition, node or
 pending reason, the run a job writes to) and the dashboard's own last
 regeneration time, host and cycle duration.
 
+Toy distribution validation: one matrix of the final backward samples of the toy runs (`runs/toy_*`,
+rows the distributions with their priors, columns the networks: dense, mask K=full, mask K=32, gather
+K=32) drawn from the saved coordinates `im/<fb>_<n>_<i>/samples.npz`, a strip of the energy distance to the
+data along the IPF iterations, a table of the last and best distances, and the forward matrix in a
+collapsed section. `python -m sparse_dsb.toy_resample` writes the coordinates for runs that predate them.
+
 Benchmark: `report/benchmark_rtx6000.txt` verbatim.
 
 ## Regeneration cost
