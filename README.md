@@ -235,11 +235,18 @@ faces. Loss curves: `report/smoke/*_loss.png`; per-half-step tables:
 ### Longer runs (3 IPF iterations of 20,000 steps, learning rate 2e-4)
 
 `configs/celeba64_st_long.yaml` and `configs/celeba64_z1t_long.yaml`, same
-models, one GPU each. After the first backward half-step (20k steps, 30 min for
-st and 20 min for z1t) the backward samples match the data statistics
-(variance 0.061 / 0.069, mean 0.448 / 0.437) and show faces at the 4x4 patch
-granularity; after the second backward half-step the st samples are clearly
-recognisable, varied faces (`report/long/st_backward_samples_n2_20k.png`), the
-z1t samples the same with more pixel noise. Every half-step takes 30 to 48 min
-(a cache refresh with a trained network costs 6 s, 200 of them per half-step);
-the dashboard follows the runs live.
+models, one RTX PRO 6000 each, both complete.
+
+| run | wall time | half-step (20k steps) | backward samples after iteration 3: variance, mean | forward samples: variance, mean |
+|---|---|---|---|---|
+| `celeba64_st_long` | 4 h 31 min | 30 min (reference cache), 48 min (network cache) | 0.049 (iteration 2), see grids | 0.613, 0.444 |
+| `celeba64_z1t_long` | 2 h 53 min | 20 min, 30 min | 0.059, 0.432 | 0.631, 0.446 |
+
+Targets: data variance 0.077 and mean 0.445, prior variance 0.5. The st
+samples are recognisable, varied faces from the second backward half-step on
+(`report/long/st_backward_samples_n{2,3}_20k.png`); the z1t samples have the
+same layouts with more pixel noise (`report/long/z1t_backward_samples_n3_20k.png`).
+Loss curves and per-half-step tables are in `report/long/`. A cache refresh
+with a trained network costs 6 s and there are 200 per half-step, which is
+where the network-cache half-steps spend 20 of their 48 min; the multi-GPU
+mode splits that cost across devices.
