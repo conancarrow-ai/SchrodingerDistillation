@@ -239,7 +239,7 @@ models, one RTX PRO 6000 each, both complete.
 
 | run | wall time | half-step (20k steps) | backward samples after iteration 3: variance, mean | forward samples: variance, mean |
 |---|---|---|---|---|
-| `celeba64_st_long` | 4 h 31 min | 30 min (reference cache), 48 min (network cache) | 0.049 (iteration 2), see grids | 0.613, 0.444 |
+| `celeba64_st_long` | 4 h 31 min | 30 min (reference cache), 48 min (network cache) | 0.049, 0.449 | 0.613, 0.444 |
 | `celeba64_z1t_long` | 2 h 53 min | 20 min, 30 min | 0.059, 0.432 | 0.631, 0.446 |
 
 Targets: data variance 0.077 and mean 0.445, prior variance 0.5. The st
